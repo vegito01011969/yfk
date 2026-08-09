@@ -4,6 +4,8 @@
 
 The production workflow is `.github/workflows/pipeline.yml`. It runs automatically every 4 hours and can also be started manually from the GitHub Actions UI.
 
+The media workflow must run on a self-hosted GitHub Actions runner labeled `youtube-pipeline`. GitHub-hosted runners are not reliable for this project because YouTube commonly blocks shared runner IPs with “Sign in to confirm you’re not a bot,” even when valid cookies and a JavaScript runtime are provided.
+
 Schedule:
 
 ```yaml
@@ -22,11 +24,22 @@ Required GitHub repository secrets:
 
 `YOUTUBE_OAUTH_TOKEN_JSON` is the full contents of the locally authorized YouTube OAuth token file. Generate or refresh it locally by running the upload stage once, then copy `data/youtube_oauth_token.json` into the GitHub secret. The Actions workflow is intentionally non-interactive; if this token is missing or invalid, the run fails instead of trying to open a browser.
 
-`YOUTUBE_COOKIES_TXT` is a Netscape-format YouTube cookies export used by `yt-dlp` for downloads on GitHub-hosted runners. Without this, YouTube may reject runner traffic with “Sign in to confirm you’re not a bot.” Export cookies from the same browser/account you use for YouTube access and refresh this secret whenever YouTube invalidates the cookies.
+`YOUTUBE_COOKIES_TXT` is a Netscape-format YouTube cookies export used by `yt-dlp` for downloads on the self-hosted runner. Without this, YouTube may reject download traffic with “Sign in to confirm you’re not a bot.” Export cookies from the same browser/account you use for YouTube access and refresh this secret whenever YouTube invalidates the cookies.
+
+Self-hosted runner setup:
+
+1. Use a machine/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally. Your local Mac is a good candidate because it has already passed this check.
+2. Install Python 3.11+, Node.js 22+, `ffmpeg`, `ffprobe`, and Git.
+3. In GitHub, open the repo settings, then `Actions` -> `Runners` -> `New self-hosted runner`.
+4. Follow GitHub's install commands on that machine.
+5. When configuring runner labels, add `youtube-pipeline`.
+6. Start the runner service and keep it online. The scheduled workflow will wait for a matching online runner.
+7. Keep the same repository secrets configured in GitHub; the workflow still materializes OAuth and cookie files at runtime.
 
 Runtime behavior:
 
-- Installs Python dependencies, `ffmpeg`, and Node.js for `yt-dlp` JavaScript challenges.
+- Installs Python dependencies and sets up Node.js for `yt-dlp` JavaScript challenges.
+- Installs `ffmpeg` automatically on Linux self-hosted runners when missing; on macOS or other runners, verifies that `ffmpeg` and `ffprobe` are already installed.
 - Sets `YT_DLP_JS_RUNTIMES=node` so `yt-dlp` actually uses the installed Node.js runtime.
 - Sets `YT_DLP_EXTRACTOR_ARGS=youtube:player_client=web` so YouTube cookies apply to the web player client.
 - Validates that `YOUTUBE_COOKIES_TXT` is raw Netscape cookies.txt content before the pipeline starts.
