@@ -4,7 +4,7 @@
 
 The production workflow is `.github/workflows/pipeline.yml`. It runs automatically every 4 hours and can also be started manually from the GitHub Actions UI.
 
-The media workflow must run on a self-hosted GitHub Actions runner labeled `youtube-pipeline`. GitHub-hosted runners are not reliable for this project because YouTube commonly blocks shared runner IPs with “Sign in to confirm you’re not a bot,” even when valid cookies and a JavaScript runtime are provided.
+The media workflow currently runs on GitHub-hosted Ubuntu runners with an experimental YouTube PO-token setup. YouTube commonly blocks shared runner IPs with “Sign in to confirm you’re not a bot,” even when valid cookies and a JavaScript runtime are provided, so this setup may still fail depending on YouTube's current enforcement and the runner IP assigned to the job.
 
 Schedule:
 
@@ -24,24 +24,24 @@ Required GitHub repository secrets:
 
 `YOUTUBE_OAUTH_TOKEN_JSON` is the full contents of the locally authorized YouTube OAuth token file. Generate or refresh it locally by running the upload stage once, then copy `data/youtube_oauth_token.json` into the GitHub secret. The Actions workflow is intentionally non-interactive; if this token is missing or invalid, the run fails instead of trying to open a browser.
 
-`YOUTUBE_COOKIES_TXT` is a Netscape-format YouTube cookies export used by `yt-dlp` for downloads on the self-hosted runner. Without this, YouTube may reject download traffic with “Sign in to confirm you’re not a bot.” Export cookies from the same browser/account you use for YouTube access and refresh this secret whenever YouTube invalidates the cookies.
+`YOUTUBE_COOKIES_TXT` is a Netscape-format YouTube cookies export used by `yt-dlp` for downloads. Without this, YouTube may reject download traffic with “Sign in to confirm you’re not a bot.” Export cookies from the same browser/account you use for YouTube access and refresh this secret whenever YouTube invalidates the cookies.
 
-Self-hosted runner setup:
+Hosted-runner YouTube download setup:
 
-1. Use a machine/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally. Your local Mac is a good candidate because it has already passed this check.
-2. Install Python 3.11+, Node.js 22+, `ffmpeg`, `ffprobe`, and Git.
-3. In GitHub, open the repo settings, then `Actions` -> `Runners` -> `New self-hosted runner`.
-4. Follow GitHub's install commands on that machine.
-5. When configuring runner labels, add `youtube-pipeline`.
-6. Start the runner service and keep it online. The scheduled workflow will wait for a matching online runner.
-7. Keep the same repository secrets configured in GitHub; the workflow still materializes OAuth and cookie files at runtime.
+1. Installs `yt-dlp>=2025.5.22`, which supports PO-token provider plugins.
+2. Installs `bgutil-ytdlp-pot-provider==1.3.1` into the workflow Python environment.
+3. Starts the matching `brainicism/bgutil-ytdlp-pot-provider:1.3.1` Docker service on port `4416`.
+4. Uses `YT_DLP_EXTRACTOR_ARGS=youtube:player_client=mweb`, so `yt-dlp` can use the recommended mobile-web client path with PO-token support.
+5. Still passes `YOUTUBE_COOKIES_TXT`, Node.js, and `YT_DLP_JS_RUNTIMES=node`.
+
+If hosted downloads keep failing with the same bot-wall error, the remaining reliable option is to run the workflow on a self-hosted runner or another controlled machine/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally.
 
 Runtime behavior:
 
-- Installs Python dependencies and sets up Node.js for `yt-dlp` JavaScript challenges.
-- Installs `ffmpeg` automatically on Linux self-hosted runners when missing; on macOS or other runners, verifies that `ffmpeg` and `ffprobe` are already installed.
+- Installs Python dependencies, `ffmpeg`, and sets up Node.js for `yt-dlp` JavaScript challenges.
+- Starts the bgutil PO-token provider service for `yt-dlp`.
 - Sets `YT_DLP_JS_RUNTIMES=node` so `yt-dlp` actually uses the installed Node.js runtime.
-- Sets `YT_DLP_EXTRACTOR_ARGS=youtube:player_client=web` so YouTube cookies apply to the web player client.
+- Sets `YT_DLP_EXTRACTOR_ARGS=youtube:player_client=mweb` so YouTube downloads use the mobile-web client path with PO-token support.
 - Validates that `YOUTUBE_COOKIES_TXT` is raw Netscape cookies.txt content before the pipeline starts.
 - Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
 - Writes OAuth JSON and YouTube cookies secrets into ignored files under `secrets/`.

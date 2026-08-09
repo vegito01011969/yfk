@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 media = [
-  "yt-dlp>=2024.8.6",
+  "yt-dlp>=2025.5.22",
 ]
 ai = []
 dev = [
