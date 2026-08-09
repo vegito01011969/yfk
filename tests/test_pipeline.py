@@ -1,0 +1,315 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from viral_pipeline.config import Settings
+from viral_pipeline.domain import (
+    ClipCandidate,
+    NarrationScript,
+    PipelineContext,
+    RenderAsset,
+    RunStatus,
+    StageName,
+    Trend,
+    YouTubeVideo,
+)
+from viral_pipeline.providers import YtDlpFfmpegMediaProvider
+from viral_pipeline.runner import PipelineRunner
+from viral_pipeline.stages import (
+    GroupEventsStage,
+    IdentifyMomentsStage,
+    PreparePublishStage,
+    RankEventsStage,
+    UploadYouTubeStage,
+    _clip_hash_distance,
+)
+from viral_pipeline.storage import PipelineStore
+
+
+def make_settings(tmp_path: Path) -> Settings:
+    return Settings(
+        _env_file=None,
+        pipeline_db_path=tmp_path / "pipeline.sqlite3",
+        pipeline_workdir=tmp_path / "workdir",
+        source_history_path=tmp_path / "source_video_history.json",
+        max_trends=2,
+        selected_trend_count=1,
+        max_videos_per_trend=2,
+        max_download_videos=2,
+        max_clips=4,
+        use_real_media=False,
+    )
+
+
+def test_full_local_pipeline_persists_publish_package(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    store = PipelineStore(settings.pipeline_db_path)
+    runner = PipelineRunner(settings, store)
+
+    context = runner.run()
+
+    assert context.trends
+    assert context.videos
+    assert len(context.selected_trends) == 1
+    assert len(context.analyzed_videos) == 2
+    assert all(
+        video.downloaded_path and video.downloaded_path.exists()
+        for video in context.analyzed_videos
+    )
+    assert context.selected_clips
+    assert context.moments
+    assert context.events
+    assert context.selected_events
+    assert len(context.selected_clips) == len(context.selected_events)
+    assert context.script is not None
+    assert context.voiceover is None
+    assert context.render is not None
+    assert context.publish_package is not None
+    assert context.publish_package.path.exists()
+    assert store.get_run(context.run_id)["status"] == RunStatus.COMPLETE.value
+    assert StageName.PREPARE_PUBLISH in store.completed_stages(context.run_id)
+
+
+def test_resume_skips_completed_stages(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    store = PipelineStore(settings.pipeline_db_path)
+    runner = PipelineRunner(settings, store)
+
+    context = runner.run()
+    first_context_mtime = (context.workdir / "context.json").stat().st_mtime
+
+    resumed = runner.run(run_id=context.run_id, resume=True)
+
+    assert resumed.run_id == context.run_id
+    assert (context.workdir / "context.json").stat().st_mtime == first_context_mtime
+
+
+def test_single_stage_can_be_rerun_for_debugging(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    store = PipelineStore(settings.pipeline_db_path)
+    runner = PipelineRunner(settings, store)
+
+    context = runner.run()
+    rerun = runner.run(run_id=context.run_id, only_stage=StageName.RANK_EVENTS, resume=False)
+
+    assert rerun.selected_clips
+    assert rerun.selected_events[0].final_score >= rerun.selected_events[-1].final_score
+
+
+def test_ffmpeg_extractor_builds_segments_from_scene_boundaries(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.max_clips_per_video = 4
+    provider = YtDlpFfmpegMediaProvider(settings)
+
+    segments = provider._segments_from_boundaries([5.0, 10.0, 28.0], duration=45.0)
+
+    assert segments == [
+        (0.0, 5.0, "scene_boundary"),
+        (5.0, 10.0, "scene_boundary"),
+        (10.0, 28.0, "scene_boundary"),
+        (28.0, 45.0, "scene_boundary"),
+    ]
+
+
+def test_clip_hash_distance_detects_exact_and_near_duplicates() -> None:
+    assert _clip_hash_distance("00ff", "00ff") == 0
+    assert _clip_hash_distance("00ff", "00fe") == 1
+    assert _clip_hash_distance("00ff", "ff00") == 16
+
+
+def test_content_event_stages_select_representative_clips(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    context = PipelineContext(
+        run_id="event-test",
+        workdir=tmp_path,
+        analyzed_videos=[
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Funny kids moments compilation",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+        unique_clips=[
+            ClipCandidate(
+                id="clip-1",
+                video_id="video-1",
+                trend_id="trend-1",
+                start_seconds=0,
+                end_seconds=10,
+                title="funny toddler reaction",
+                quality_score=0.8,
+            ),
+            ClipCandidate(
+                id="clip-2",
+                video_id="video-1",
+                trend_id="trend-1",
+                start_seconds=35,
+                end_seconds=45,
+                title="another funny kid reaction",
+                quality_score=0.9,
+            ),
+        ],
+    )
+
+    context = IdentifyMomentsStage(settings).run(context)
+    context = GroupEventsStage(settings).run(context)
+    context = RankEventsStage(settings).run(context)
+
+    assert len(context.events) == 2
+    assert context.selected_events
+    assert context.selected_clips
+    assert context.selected_clips[0].id in {
+        event.representative_clip_id for event in context.selected_events
+    }
+
+
+def test_content_event_grouping_merges_same_visual_moment_across_sources(
+    tmp_path: Path,
+) -> None:
+    settings = make_settings(tmp_path)
+    context = PipelineContext(
+        run_id="event-merge-test",
+        workdir=tmp_path,
+        analyzed_videos=[
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Funny toddler moments compilation",
+                url="https://www.youtube.com/watch?v=video-1",
+            ),
+            YouTubeVideo(
+                id="video-2",
+                trend_id="trend-1",
+                title="Cute funny kids videos",
+                url="https://www.youtube.com/watch?v=video-2",
+            ),
+        ],
+        unique_clips=[
+            ClipCandidate(
+                id="clip-1",
+                video_id="video-1",
+                trend_id="trend-1",
+                start_seconds=5,
+                end_seconds=15,
+                title="same funny toddler reaction",
+                perceptual_hash="abcdef1234567890aaa",
+                quality_score=0.75,
+            ),
+            ClipCandidate(
+                id="clip-2",
+                video_id="video-2",
+                trend_id="trend-1",
+                start_seconds=90,
+                end_seconds=100,
+                title="same funny toddler reaction different upload",
+                perceptual_hash="abcdef1234567890bbb",
+                quality_score=0.92,
+            ),
+        ],
+    )
+
+    context = IdentifyMomentsStage(settings).run(context)
+    context = GroupEventsStage(settings).run(context)
+    context = RankEventsStage(settings).run(context)
+
+    assert len(context.events) == 1
+    event = context.events[0]
+    assert event.source_video_ids == ["video-1", "video-2"]
+    assert event.evidence_clip_ids == ["clip-1", "clip-2"]
+    assert event.representative_clip_id == "clip-2"
+    assert context.selected_clips[0].id == "clip-2"
+
+
+def test_prepare_publish_uses_llm_youtube_metadata(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    context = PipelineContext(
+        run_id="publish-test",
+        workdir=tmp_path,
+        selected_trends=[
+            Trend(
+                title="funny kids shorts",
+                source="test",
+                metadata={"source_language": "en"},
+            )
+        ],
+        selected_clips=[
+            ClipCandidate(
+                id="clip-1",
+                video_id="video-1",
+                trend_id="trend-1",
+                start_seconds=0,
+                end_seconds=10,
+                title="funny kid reaction",
+            )
+        ],
+        script=NarrationScript(
+            title="Fallback title",
+            hook="Fallback hook",
+            body=[],
+            outro="",
+            metadata={
+                "provider": "groqcloud",
+                "youtube_metadata": {
+                    "title": "Tiny Laughs That Escalate Fast",
+                    "description": "Five quick funny kid moments with simple visual payoffs.",
+                    "tags": ["funny kids", "kids shorts", "family funny moments"],
+                    "hashtags": ["#FunnyKids", "#Shorts"],
+                    "summary": "A quick funny kids compilation.",
+                },
+            },
+        ),
+        render=RenderAsset(path=tmp_path / "render" / "final_video.mp4", provider="ffmpeg"),
+    )
+
+    context = PreparePublishStage(settings).run(context)
+
+    assert context.publish_package is not None
+    assert context.publish_package.title == "Tiny Laughs That Escalate Fast"
+    assert "Five quick funny kid moments" in context.publish_package.description
+    assert "#FunnyKids #Shorts" in context.publish_package.description
+    assert context.publish_package.tags == [
+        "funny kids",
+        "kids shorts",
+        "family funny moments",
+    ]
+    assert context.publish_package.metadata["llm_provider"] == "groqcloud"
+
+
+def test_upload_youtube_stage_skips_when_disabled(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.enable_youtube_upload = False
+    context = PipelineContext(run_id="upload-test", workdir=tmp_path)
+
+    context = UploadYouTubeStage(settings).run(context)
+
+    assert context.youtube_upload is not None
+    assert context.youtube_upload.status == "skipped"
+    assert context.youtube_upload.path.exists()
+
+
+def test_upload_youtube_stage_does_not_reupload_existing_result(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.enable_youtube_upload = True
+    upload_dir = tmp_path / "upload"
+    upload_dir.mkdir()
+    existing = {
+        "path": str(upload_dir / "youtube_upload.json"),
+        "video_id": "video-123",
+        "url": "https://www.youtube.com/watch?v=video-123",
+        "status": "uploaded",
+        "privacy_status": "private",
+        "provider": "youtube_data_api",
+        "metadata": {},
+    }
+    (upload_dir / "youtube_upload.json").write_text(
+        __import__("json").dumps(existing),
+        encoding="utf-8",
+    )
+    context = PipelineContext(run_id="upload-test", workdir=tmp_path)
+
+    context = UploadYouTubeStage(settings).run(context)
+
+    assert context.youtube_upload is not None
+    assert context.youtube_upload.video_id == "video-123"
+    assert context.youtube_upload.metadata["skipped_duplicate_upload"] is True

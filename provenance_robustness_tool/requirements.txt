@@ -1,0 +1,4 @@
+# Runtime uses only the Python standard library.
+# External command-line dependencies:
+# - ffmpeg
+# - ffprobe
