@@ -86,6 +86,9 @@ jobs:
           PY
 
       - name: Run tests
+        env:
+          ENABLE_YOUTUBE_UPLOAD: "false"
+          USE_REAL_MEDIA: "false"
         run: pytest -q
 
       - name: Run full pipeline

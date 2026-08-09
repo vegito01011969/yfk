@@ -41,6 +41,7 @@ def make_settings(tmp_path: Path) -> Settings:
         max_download_videos=2,
         max_clips=4,
         use_real_media=False,
+        enable_youtube_upload=False,
     )
 
 
