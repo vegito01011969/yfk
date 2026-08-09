@@ -140,6 +140,7 @@ def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch
     cookies_path = tmp_path / "cookies.txt"
     cookies_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
     settings.yt_dlp_cookies_path = cookies_path
+    settings.yt_dlp_js_runtimes = "node"
     provider = YtDlpVideoDownloadProvider(settings)
     commands: list[list[str]] = []
 
@@ -162,6 +163,8 @@ def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch
 
     assert "--cookies" in commands[0]
     assert str(cookies_path) in commands[0]
+    assert "--js-runtimes" in commands[0]
+    assert "node" in commands[0]
 
 
 def test_clip_hash_distance_detects_exact_and_near_duplicates() -> None:

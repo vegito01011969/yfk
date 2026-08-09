@@ -31,6 +31,7 @@ jobs:
       YOUTUBE_OAUTH_CLIENT_SECRETS: secrets/youtube_client_secret.json
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
       YT_DLP_COOKIES_PATH: secrets/youtube_cookies.txt
+      YT_DLP_JS_RUNTIMES: node
 
     steps:
       - name: Check out repository

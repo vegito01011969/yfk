@@ -86,6 +86,7 @@ Key environment variables:
 - `USE_REAL_MEDIA`: enables `yt-dlp` and `ffmpeg` media operations.
 - `YT_DLP_FORMAT`: yt-dlp format selector. Default caps downloads around 720p.
 - `YT_DLP_COOKIES_PATH`: optional Netscape-format cookies file for `yt-dlp`; required on GitHub Actions if YouTube blocks anonymous runner downloads.
+- `YT_DLP_JS_RUNTIMES`: optional `yt-dlp --js-runtimes` value. The scheduled workflow sets this to `node`.
 - `RENDER_MODE`: output style. Default: `plain_compilation`.
 - `RENDER_WIDTH` / `RENDER_HEIGHT`: final canvas size. Default: `1080x1920` for YouTube Shorts-compatible vertical output.
 - `APPLY_PROVENANCE_TRANSFORM`: run `provenance_robustness_tool` after assembly. Default: `true`.
