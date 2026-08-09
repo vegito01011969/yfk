@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -18,7 +19,9 @@ from viral_pipeline.domain import (
 )
 from viral_pipeline.providers import YtDlpFfmpegMediaProvider, YtDlpVideoDownloadProvider
 from viral_pipeline.runner import PipelineRunner
+from viral_pipeline.source_history import SourceHistory
 from viral_pipeline.stages import (
+    DownloadVideosStage,
     GroupEventsStage,
     IdentifyMomentsStage,
     PreparePublishStage,
@@ -141,6 +144,7 @@ def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch
     cookies_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
     settings.yt_dlp_cookies_path = cookies_path
     settings.yt_dlp_js_runtimes = "node"
+    settings.yt_dlp_extractor_args = "youtube:player_client=web"
     provider = YtDlpVideoDownloadProvider(settings)
     commands: list[list[str]] = []
 
@@ -165,6 +169,46 @@ def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch
     assert str(cookies_path) in commands[0]
     assert "--js-runtimes" in commands[0]
     assert "node" in commands[0]
+    assert "--extractor-args" in commands[0]
+    assert "youtube:player_client=web" in commands[0]
+
+
+def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+
+    class AlwaysFailProvider:
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            raise subprocess.CalledProcessError(1, ["yt-dlp", video.url])
+
+    context = PipelineContext(
+        run_id="download-failure-test",
+        workdir=tmp_path,
+        selected_trends=[
+            Trend(
+                title="funny toddler fails shorts",
+                source="test",
+                metadata={"source_language": "en"},
+            )
+        ],
+        analyzed_videos=[
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Funny toddler short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+    )
+
+    try:
+        DownloadVideosStage(settings, AlwaysFailProvider()).run(context)
+    except RuntimeError as exc:
+        assert "No source videos" in str(exc)
+    else:
+        raise AssertionError("download stage should fail when no downloads succeed")
+
+    history = SourceHistory(settings.source_history_path)._data()
+    assert history["videos"]["video-1"]["stage"] == "download_failed"
 
 
 def test_clip_hash_distance_detects_exact_and_near_duplicates() -> None:

@@ -32,6 +32,7 @@ jobs:
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
       YT_DLP_COOKIES_PATH: secrets/youtube_cookies.txt
       YT_DLP_JS_RUNTIMES: node
+      YT_DLP_EXTRACTOR_ARGS: youtube:player_client=web
 
     steps:
       - name: Check out repository
@@ -92,6 +93,29 @@ jobs:
 
           for env_name, path in required.items():
               path.write_text(os.environ[env_name], encoding="utf-8")
+          PY
+
+      - name: Validate YouTube cookies file
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("secrets/youtube_cookies.txt")
+          text = path.read_text(encoding="utf-8")
+          lines = [line for line in text.splitlines() if line.strip()]
+          if not lines:
+              raise SystemExit("YOUTUBE_COOKIES_TXT produced an empty cookies file")
+          if not lines[0].startswith(("# Netscape HTTP Cookie File", "# HTTP Cookie File")):
+              raise SystemExit(
+                  "YOUTUBE_COOKIES_TXT must be raw Netscape cookies.txt content, not base64 or JSON"
+              )
+          youtube_lines = [
+              line for line in lines
+              if not line.startswith("#") and ("youtube.com" in line or "google.com" in line)
+          ]
+          if not youtube_lines:
+              raise SystemExit("YOUTUBE_COOKIES_TXT has no youtube.com/google.com cookie rows")
+          print(f"Validated YouTube cookies file: {len(lines)} lines, {len(youtube_lines)} relevant rows")
           PY
 
       - name: Run full pipeline

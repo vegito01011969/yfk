@@ -705,6 +705,13 @@ class DownloadVideosStage(PipelineStage):
         download_dir = context.workdir / "downloads"
         downloaded: list[YouTubeVideo] = []
         failed: list[YouTubeVideo] = []
+        query = context.selected_trends[0].title if context.selected_trends else None
+        selected_language = (
+            context.selected_trends[0].metadata.get("source_language")
+            if context.selected_trends
+            else None
+        )
+        language = str(selected_language) if selected_language else None
         for video in _dedupe_videos(context.analyzed_videos):
             if len(downloaded) >= self.settings.max_download_videos:
                 break
@@ -718,19 +725,16 @@ class DownloadVideosStage(PipelineStage):
                 LOGGER.warning("Skipping failed download for %s: %s", video.id, exc)
                 continue
         if not downloaded:
+            if failed:
+                SourceHistory(self.settings.source_history_path).mark_videos_seen(
+                    failed,
+                    run_id=context.run_id,
+                    query=query,
+                    language=language,
+                    stage="download_failed",
+                )
             raise RuntimeError("No source videos could be downloaded")
         context.analyzed_videos = downloaded
-        query = context.selected_trends[0].title if context.selected_trends else None
-        selected_language = (
-            context.selected_trends[0].metadata.get("source_language")
-            if context.selected_trends
-            else None
-        )
-        language = (
-            str(selected_language)
-            if selected_language
-            else None
-        )
         SourceHistory(self.settings.source_history_path).mark_videos_seen(
             downloaded,
             run_id=context.run_id,

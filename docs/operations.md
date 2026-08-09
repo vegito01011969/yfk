@@ -28,6 +28,8 @@ Runtime behavior:
 
 - Installs Python dependencies, `ffmpeg`, and Node.js for `yt-dlp` JavaScript challenges.
 - Sets `YT_DLP_JS_RUNTIMES=node` so `yt-dlp` actually uses the installed Node.js runtime.
+- Sets `YT_DLP_EXTRACTOR_ARGS=youtube:player_client=web` so YouTube cookies apply to the web player client.
+- Validates that `YOUTUBE_COOKIES_TXT` is raw Netscape cookies.txt content before the pipeline starts.
 - Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
 - Writes OAuth JSON and YouTube cookies secrets into ignored files under `secrets/`.
 - Runs `viral-pipeline run --no-resume` with real media and public YouTube upload enabled.

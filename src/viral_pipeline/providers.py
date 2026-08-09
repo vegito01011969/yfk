@@ -997,6 +997,8 @@ class YtDlpVideoDownloadProvider:
             command.extend(["--cookies", str(cookies_path)])
         if self.settings.yt_dlp_js_runtimes:
             command.extend(["--js-runtimes", self.settings.yt_dlp_js_runtimes])
+        if self.settings.yt_dlp_extractor_args:
+            command.extend(["--extractor-args", self.settings.yt_dlp_extractor_args])
         command.append(video.url)
         subprocess.run(command, check=True)
         downloaded = self._find_download(video.id, output_dir)
