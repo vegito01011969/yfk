@@ -26,11 +26,12 @@ Runtime behavior:
 - Installs Python dependencies and `ffmpeg`.
 - Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
 - Writes OAuth JSON secrets into ignored files under `secrets/`.
-- Runs tests.
-- Runs `viral-pipeline run --no-resume` with real media and private YouTube upload enabled.
+- Runs `viral-pipeline run --no-resume` with real media and public YouTube upload enabled.
 - Uploads metadata-only diagnostics for failed runs with 3-day retention.
 - Runs `viral-pipeline cleanup --yes` to remove bulky/resumable state.
 - Saves only updated `data/source_video_history.json` for the next scheduled run.
+
+Tests and lint run separately in `.github/workflows/ci.yml` on push and pull request. They are intentionally not part of the 4-hour upload workflow.
 
 The workflow uploads videos as public by default:
 
