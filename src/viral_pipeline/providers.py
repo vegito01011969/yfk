@@ -417,7 +417,11 @@ def _append_language_to_query(query: str, language: str | None) -> str:
     return f"{query} {label}"
 
 
-def _shorts_search_queries(query: str, language: str | None, settings: Settings | None) -> list[str]:
+def _shorts_search_queries(
+    query: str,
+    language: str | None,
+    settings: Settings | None,
+) -> list[str]:
     base_query = query if "short" in query.lower() else f"{query} shorts"
     queries = [_append_language_to_query(base_query, language)]
     if settings and settings.content_domain == "kids_funny":
@@ -925,7 +929,11 @@ class YouTubeDataProvider:
             if updated.id in seen_ids:
                 updated.metadata["filtered_reason"] = "previously_seen_source_video"
                 continue
-            if self.settings and self.settings.content_domain == "kids_funny" and relevance_score < 0.45:
+            if (
+                self.settings
+                and self.settings.content_domain == "kids_funny"
+                and relevance_score < 0.45
+            ):
                 updated.metadata["filtered_reason"] = "low_kids_funny_relevance"
                 continue
             fresh_videos.append(updated)

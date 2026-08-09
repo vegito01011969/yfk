@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     youtube_oauth_token_path: Path = Field(default=Path("data/youtube_oauth_token.json"))
     enable_youtube_upload: bool = False
     youtube_upload_allow_duplicate: bool = False
-    youtube_upload_privacy_status: str = "private"
+    youtube_upload_privacy_status: str = "public"
     youtube_upload_notify_subscribers: bool = False
     youtube_upload_category_id: str = "22"
     youtube_video_made_for_kids: bool = False

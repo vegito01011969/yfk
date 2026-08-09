@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from typer.testing import CliRunner
+
+from viral_pipeline import cli
 from viral_pipeline.config import Settings
 from viral_pipeline.domain import (
     ClipCandidate,
@@ -82,6 +85,26 @@ def test_resume_skips_completed_stages(tmp_path: Path) -> None:
 
     assert resumed.run_id == context.run_id
     assert (context.workdir / "context.json").stat().st_mtime == first_context_mtime
+
+
+def test_cleanup_removes_bulky_state_and_keeps_source_history(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.pipeline_workdir.mkdir(parents=True)
+    (settings.pipeline_workdir / "artifact.mp4").write_text("media", encoding="utf-8")
+    settings.pipeline_db_path.write_text("sqlite", encoding="utf-8")
+    settings.source_history_path.write_text(
+        '{"videos": {"abc": {}}, "queries": {}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "_settings", lambda: settings)
+
+    result = CliRunner().invoke(cli.app, ["cleanup", "--yes"])
+
+    assert result.exit_code == 0
+    assert not settings.pipeline_workdir.exists()
+    assert not settings.pipeline_db_path.exists()
+    assert settings.source_history_path.exists()
+    assert '"abc"' in settings.source_history_path.read_text(encoding="utf-8")
 
 
 def test_single_stage_can_be_rerun_for_debugging(tmp_path: Path) -> None:

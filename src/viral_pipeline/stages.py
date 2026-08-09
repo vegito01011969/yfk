@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import sys
 from abc import ABC, abstractmethod
@@ -1264,6 +1265,11 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
     if credentials and credentials.expired and credentials.refresh_token:
         credentials.refresh(Request())
     if not credentials or not credentials.valid:
+        if os.getenv("CI"):
+            raise ValueError(
+                "YouTube OAuth token is missing or invalid in CI. "
+                "Refresh it locally and update the YOUTUBE_OAUTH_TOKEN_JSON secret."
+            )
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_secret_path),
             scopes=[YOUTUBE_UPLOAD_SCOPE],

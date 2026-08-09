@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Annotated
 
@@ -102,3 +103,44 @@ def paths() -> None:
         "workdir": str(Path(settings.pipeline_workdir).resolve()),
     }
     console.print(json.dumps(payload, indent=2))
+
+
+@app.command()
+def cleanup(
+    keep_source_history: Annotated[
+        bool,
+        typer.Option(help="Keep source history used for cross-run duplicate avoidance."),
+    ] = True,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Run without confirmation.")] = False,
+) -> None:
+    """Remove bulky/resumable pipeline state after a completed scheduled run."""
+    settings = _settings()
+    paths_to_remove = [
+        settings.pipeline_workdir,
+        settings.pipeline_db_path,
+    ]
+    if not keep_source_history:
+        paths_to_remove.append(settings.source_history_path)
+
+    if not yes:
+        console.print("Cleanup will remove:")
+        for path in paths_to_remove:
+            console.print(f"- {path}")
+        raise typer.Abort()
+
+    removed: list[str] = []
+    for path in paths_to_remove:
+        if path.is_dir():
+            shutil.rmtree(path)
+            removed.append(str(path))
+        elif path.exists():
+            path.unlink()
+            removed.append(str(path))
+
+    settings.source_history_path.parent.mkdir(parents=True, exist_ok=True)
+    if keep_source_history and not settings.source_history_path.exists():
+        settings.source_history_path.write_text(
+            json.dumps({"videos": {}, "queries": {}}, indent=2),
+            encoding="utf-8",
+        )
+    console.print_json(json.dumps({"removed": removed}))

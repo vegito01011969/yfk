@@ -78,7 +78,7 @@ Key environment variables:
 - `YOUTUBE_OAUTH_CLIENT_SECRETS`: OAuth desktop client JSON for uploads.
 - `YOUTUBE_OAUTH_TOKEN_PATH`: stored OAuth refresh token path.
 - `ENABLE_YOUTUBE_UPLOAD`: enables the final YouTube upload stage. Default: `false`.
-- `YOUTUBE_UPLOAD_PRIVACY_STATUS`: upload visibility. Default: `private`.
+- `YOUTUBE_UPLOAD_PRIVACY_STATUS`: upload visibility. Default: `public`.
 - `YOUTUBE_VIDEO_MADE_FOR_KIDS`: YouTube audience flag. Default: `false`.
 - `GROQCLOUD_API_KEY` or `GROQ_API_KEY`: enables GroqCloud LLM metadata generation.
 - `GROQCLOUD_MODEL`: OpenAI-compatible Groq model. Default: `openai/gpt-oss-20b`.
@@ -121,6 +121,6 @@ workdir/runs/<run-id>/render/pre_provenance_final_video.mp4
 
 ## Notes On Publishing
 
-Uploads are controlled by `ENABLE_YOUTUBE_UPLOAD` and default to private visibility. Automated public publishing should be added only after policy, copyright, consent, and rights-review checks are encoded as explicit gates.
+Uploads are controlled by `ENABLE_YOUTUBE_UPLOAD` and default to public visibility. Production use should include policy, copyright, consent, and rights-review checks as explicit gates.
 
 Kids/family short-video content can involve additional consent, privacy, and platform-policy concerns. Treat this pipeline as an editing and research system; production use needs rights clearance, consent review where applicable, and platform-policy compliance.

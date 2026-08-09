@@ -1,5 +1,45 @@
 # Operations
 
+## GitHub Actions Automation
+
+The production workflow is `.github/workflows/pipeline.yml`. It runs automatically every 4 hours and can also be started manually from the GitHub Actions UI.
+
+Schedule:
+
+```yaml
+0 */4 * * *
+```
+
+Required GitHub repository secrets:
+
+- `YOUTUBE_API_KEY`
+- `GROQCLOUD_API_KEY`
+- `YOUTUBE_OAUTH_CLIENT_SECRETS_JSON`
+- `YOUTUBE_OAUTH_TOKEN_JSON`
+
+`YOUTUBE_OAUTH_CLIENT_SECRETS_JSON` is the full contents of the Google OAuth desktop client JSON file.
+
+`YOUTUBE_OAUTH_TOKEN_JSON` is the full contents of the locally authorized YouTube OAuth token file. Generate or refresh it locally by running the upload stage once, then copy `data/youtube_oauth_token.json` into the GitHub secret. The Actions workflow is intentionally non-interactive; if this token is missing or invalid, the run fails instead of trying to open a browser.
+
+Runtime behavior:
+
+- Installs Python dependencies and `ffmpeg`.
+- Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
+- Writes OAuth JSON secrets into ignored files under `secrets/`.
+- Runs tests.
+- Runs `viral-pipeline run --no-resume` with real media and private YouTube upload enabled.
+- Uploads metadata-only diagnostics for failed runs with 3-day retention.
+- Runs `viral-pipeline cleanup --yes` to remove bulky/resumable state.
+- Saves only updated `data/source_video_history.json` for the next scheduled run.
+
+The workflow uploads videos as public by default:
+
+```bash
+YOUTUBE_UPLOAD_PRIVACY_STATUS=public
+YOUTUBE_VIDEO_MADE_FOR_KIDS=false
+YOUTUBE_VIDEO_SELF_DECLARED_MADE_FOR_KIDS=false
+```
+
 ## Local Development
 
 ```bash
@@ -9,36 +49,22 @@ viral-pipeline run --verbose
 viral-pipeline status
 ```
 
-## CI Candidate
-
-The local providers make CI deterministic. A scheduled GitHub Actions job can run:
+For local production-equivalent runs:
 
 ```bash
-pip install -e ".[dev]"
-pytest
-viral-pipeline run
+pip install -e ".[media,ai,dev]"
+export USE_REAL_MEDIA=true
+export ENABLE_YOUTUBE_UPLOAD=true
+viral-pipeline run --no-resume
 ```
-
-For production runs, configure secrets:
-
-- `YOUTUBE_API_KEY`
-- `OPENAI_API_KEY`
-
-Then install optional extras:
-
-```bash
-pip install -e ".[media,ai]"
-```
-
-The media mode also requires `ffmpeg` and `yt-dlp` to be available on the runner.
 
 ## Download Stage
 
-`download_videos` downloads only the top analyzed compilation videos for the selected activity trend. By default this is three videos and one selected trend:
+`download_videos` downloads only the top analyzed short videos for the selected query bucket. Current defaults are one selected query and up to ten downloaded videos:
 
 ```bash
 export SELECTED_TREND_COUNT=1
-export MAX_DOWNLOAD_VIDEOS=3
+export MAX_DOWNLOAD_VIDEOS=10
 export USE_REAL_MEDIA=true
 viral-pipeline run
 ```
@@ -62,7 +88,9 @@ To filter duplicates and select the final examples:
 
 ```bash
 viral-pipeline run --latest --stage dedupe_clips
-viral-pipeline run --latest --stage rank_clips
+viral-pipeline run --latest --stage identify_moments
+viral-pipeline run --latest --stage group_events
+viral-pipeline run --latest --stage rank_events
 ```
 
 ## Failure Recovery
@@ -72,12 +100,17 @@ viral-pipeline run --latest --stage rank_clips
 3. Fix the failed provider or bad artifact.
 4. Resume with `viral-pipeline run --latest`.
 
-## Scheduled Automation Shape
+## Scheduled Automation Notes
 
-A production GitHub Actions workflow should:
+The workflow intentionally uses `--no-resume` so every 4-hour schedule creates a new run. Cross-run duplicate avoidance comes from the cached `data/source_video_history.json`, not from resuming the previous pipeline run.
 
-1. Restore or attach persistent storage for `data/` and `workdir/`.
-2. Run tests and lint.
-3. Execute `viral-pipeline run --latest`.
-4. Upload the publish package as an artifact.
-5. Stop before upload unless rights and policy gates pass.
+After each scheduled run, cleanup removes:
+
+- `workdir/`, including downloads, clips, renders, and per-run snapshots.
+- `data/pipeline.sqlite3`, because scheduled runs do not resume old runs.
+
+Cleanup keeps:
+
+- `data/source_video_history.json`, because it is the minimal state needed to avoid repeated source videos and rotate query buckets.
+
+Uploads are public. Review rights, consent, and policy status before each production schedule remains enabled.
