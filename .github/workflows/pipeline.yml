@@ -30,6 +30,7 @@ jobs:
       GROQCLOUD_API_KEY: ${{ secrets.GROQCLOUD_API_KEY }}
       YOUTUBE_OAUTH_CLIENT_SECRETS: secrets/youtube_client_secret.json
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
+      YT_DLP_COOKIES_PATH: secrets/youtube_cookies.txt
 
     steps:
       - name: Check out repository
@@ -40,6 +41,11 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+
+      - name: Set up Node.js for yt-dlp JavaScript challenges
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: Install ffmpeg
         run: |
@@ -61,10 +67,11 @@ jobs:
           restore-keys: |
             pipeline-state-
 
-      - name: Materialize YouTube OAuth files
+      - name: Materialize YouTube auth files
         env:
           YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
           YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.YOUTUBE_OAUTH_TOKEN_JSON }}
+          YOUTUBE_COOKIES_TXT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
         run: |
           python - <<'PY'
           import os
@@ -76,6 +83,7 @@ jobs:
           required = {
               "YOUTUBE_OAUTH_CLIENT_SECRETS_JSON": secrets_dir / "youtube_client_secret.json",
               "YOUTUBE_OAUTH_TOKEN_JSON": secrets_dir / "youtube_oauth_token.json",
+              "YOUTUBE_COOKIES_TXT": secrets_dir / "youtube_cookies.txt",
           }
           missing = [name for name in required if not os.environ.get(name)]
           if missing:

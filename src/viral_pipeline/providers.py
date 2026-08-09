@@ -978,24 +978,25 @@ class YtDlpVideoDownloadProvider:
     def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
         output_dir.mkdir(parents=True, exist_ok=True)
         output_template = output_dir / f"{video.id}.%(ext)s"
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "yt_dlp",
-                "--no-playlist",
-                "--restrict-filenames",
-                "--write-info-json",
-                "--merge-output-format",
-                "mp4",
-                "-f",
-                self.settings.yt_dlp_format,
-                "-o",
-                str(output_template),
-                video.url,
-            ],
-            check=True,
-        )
+        command = [
+            sys.executable,
+            "-m",
+            "yt_dlp",
+            "--no-playlist",
+            "--restrict-filenames",
+            "--write-info-json",
+            "--merge-output-format",
+            "mp4",
+            "-f",
+            self.settings.yt_dlp_format,
+            "-o",
+            str(output_template),
+        ]
+        cookies_path = self.settings.yt_dlp_cookies_path
+        if cookies_path and cookies_path.exists():
+            command.extend(["--cookies", str(cookies_path)])
+        command.append(video.url)
+        subprocess.run(command, check=True)
         downloaded = self._find_download(video.id, output_dir)
         updated = video.model_copy(deep=True)
         updated.downloaded_path = downloaded

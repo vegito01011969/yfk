@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     groqcloud_base_url: str = "https://api.groq.com/openai/v1"
     use_real_media: bool = False
     yt_dlp_format: str = "bv*[height<=720]+ba/b[height<=720]/best[height<=720]/best"
+    yt_dlp_cookies_path: Path | None = None
     render_width: int = 1080
     render_height: int = 1920
     render_fps: int = 30

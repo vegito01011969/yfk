@@ -12,3 +12,11 @@ dist/
 build/
 *.egg-info/
 secrets/
+
+# Local yt-dlp/cookie exports and accidental root-level media downloads
+/cookies.txt
+/cookies.base64
+/*.mp4
+/*.webm
+/*.mkv
+/*.mov

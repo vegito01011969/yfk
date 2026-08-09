@@ -16,16 +16,19 @@ Required GitHub repository secrets:
 - `GROQCLOUD_API_KEY`
 - `YOUTUBE_OAUTH_CLIENT_SECRETS_JSON`
 - `YOUTUBE_OAUTH_TOKEN_JSON`
+- `YOUTUBE_COOKIES_TXT`
 
 `YOUTUBE_OAUTH_CLIENT_SECRETS_JSON` is the full contents of the Google OAuth desktop client JSON file.
 
 `YOUTUBE_OAUTH_TOKEN_JSON` is the full contents of the locally authorized YouTube OAuth token file. Generate or refresh it locally by running the upload stage once, then copy `data/youtube_oauth_token.json` into the GitHub secret. The Actions workflow is intentionally non-interactive; if this token is missing or invalid, the run fails instead of trying to open a browser.
 
+`YOUTUBE_COOKIES_TXT` is a Netscape-format YouTube cookies export used by `yt-dlp` for downloads on GitHub-hosted runners. Without this, YouTube may reject runner traffic with “Sign in to confirm you’re not a bot.” Export cookies from the same browser/account you use for YouTube access and refresh this secret whenever YouTube invalidates the cookies.
+
 Runtime behavior:
 
-- Installs Python dependencies and `ffmpeg`.
+- Installs Python dependencies, `ffmpeg`, and Node.js for `yt-dlp` JavaScript challenges.
 - Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
-- Writes OAuth JSON secrets into ignored files under `secrets/`.
+- Writes OAuth JSON and YouTube cookies secrets into ignored files under `secrets/`.
 - Runs `viral-pipeline run --no-resume` with real media and public YouTube upload enabled.
 - Uploads metadata-only diagnostics for failed runs with 3-day retention.
 - Runs `viral-pipeline cleanup --yes` to remove bulky/resumable state.

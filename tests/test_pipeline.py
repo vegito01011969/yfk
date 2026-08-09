@@ -16,7 +16,7 @@ from viral_pipeline.domain import (
     Trend,
     YouTubeVideo,
 )
-from viral_pipeline.providers import YtDlpFfmpegMediaProvider
+from viral_pipeline.providers import YtDlpFfmpegMediaProvider, YtDlpVideoDownloadProvider
 from viral_pipeline.runner import PipelineRunner
 from viral_pipeline.stages import (
     GroupEventsStage,
@@ -133,6 +133,35 @@ def test_ffmpeg_extractor_builds_segments_from_scene_boundaries(tmp_path: Path) 
         (10.0, 28.0, "scene_boundary"),
         (28.0, 45.0, "scene_boundary"),
     ]
+
+
+def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    cookies_path = tmp_path / "cookies.txt"
+    cookies_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    settings.yt_dlp_cookies_path = cookies_path
+    provider = YtDlpVideoDownloadProvider(settings)
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *, check: bool) -> None:
+        commands.append(command)
+        output_dir = tmp_path / "downloads"
+        (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
+
+    monkeypatch.setattr("viral_pipeline.providers.subprocess.run", fake_run)
+
+    provider.download(
+        YouTubeVideo(
+            id="video-1",
+            trend_id="trend-1",
+            title="Funny toddler short",
+            url="https://www.youtube.com/watch?v=video-1",
+        ),
+        tmp_path / "downloads",
+    )
+
+    assert "--cookies" in commands[0]
+    assert str(cookies_path) in commands[0]
 
 
 def test_clip_hash_distance_detects_exact_and_near_duplicates() -> None:
