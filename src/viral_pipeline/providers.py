@@ -26,6 +26,7 @@ from viral_pipeline.source_history import SourceHistory
 LOGGER = logging.getLogger(__name__)
 
 YOUTUBE_API_BASE_URL = "https://www.googleapis.com/youtube/v3"
+COMMAND_OUTPUT_SNIPPET_CHARS = 4000
 
 STOPWORDS = {
     "about",
@@ -1003,7 +1004,22 @@ class YtDlpVideoDownloadProvider:
                 if extractor_args:
                     command.extend(["--extractor-args", extractor_args])
         command.append(video.url)
-        subprocess.run(command, check=True)
+        try:
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
+            if output:
+                LOGGER.warning(
+                    "yt-dlp failed for %s:\n%s",
+                    video.id,
+                    output[-COMMAND_OUTPUT_SNIPPET_CHARS:],
+                )
+            raise
         downloaded = self._find_download(video.id, output_dir)
         updated = video.model_copy(deep=True)
         updated.downloaded_path = downloaded

@@ -4,7 +4,7 @@
 
 The production workflow is `.github/workflows/pipeline.yml`. It runs automatically every 4 hours and can also be started manually from the GitHub Actions UI.
 
-The media workflow currently runs on GitHub-hosted Ubuntu runners with an experimental YouTube PO-token setup. YouTube commonly blocks shared runner IPs with “Sign in to confirm you’re not a bot,” even when valid cookies and a JavaScript runtime are provided, so this setup may still fail depending on YouTube's current enforcement and the runner IP assigned to the job.
+The media workflow currently runs on GitHub-hosted Ubuntu runners with an experimental YouTube PO-token setup. YouTube commonly blocks shared runner IPs with “Sign in to confirm you’re not a bot,” even when valid cookies, a JavaScript runtime, the mobile-web client, and a PO-token provider are provided.
 
 Schedule:
 
@@ -34,7 +34,7 @@ Hosted-runner YouTube download setup:
 4. Uses multiline `YT_DLP_EXTRACTOR_ARGS` so `yt-dlp` receives both `youtube:player_client=mweb` and `youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416`.
 5. Still passes `YOUTUBE_COOKIES_TXT`, Node.js, and `YT_DLP_JS_RUNTIMES=node`.
 
-If hosted downloads keep failing with the same bot-wall error, the remaining reliable option is to run the workflow on a self-hosted runner or another controlled machine/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally.
+Hosted GitHub Actions downloads have been observed failing with the same bot-wall error even after the PO-token provider was configured correctly. The remaining reliable options are to run the workflow on a controlled external runner/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally, or to replace YouTube downloads with a different licensed media source.
 
 Runtime behavior:
 

@@ -148,7 +148,13 @@ def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch
     provider = YtDlpVideoDownloadProvider(settings)
     commands: list[list[str]] = []
 
-    def fake_run(command: list[str], *, check: bool) -> None:
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> None:
         commands.append(command)
         output_dir = tmp_path / "downloads"
         (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
@@ -184,7 +190,13 @@ def test_ytdlp_download_supports_multiple_extractor_args(tmp_path: Path, monkeyp
     provider = YtDlpVideoDownloadProvider(settings)
     commands: list[list[str]] = []
 
-    def fake_run(command: list[str], *, check: bool) -> None:
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> None:
         commands.append(command)
         output_dir = tmp_path / "downloads"
         (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
@@ -242,6 +254,46 @@ def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Pat
 
     history = SourceHistory(settings.source_history_path)._data()
     assert history["videos"] == {}
+
+
+def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+
+    class BotWallProvider:
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            raise subprocess.CalledProcessError(
+                1,
+                ["yt-dlp", video.url],
+                stderr="ERROR: Sign in to confirm you’re not a bot.",
+            )
+
+    context = PipelineContext(
+        run_id="download-bot-wall-test",
+        workdir=tmp_path,
+        selected_trends=[
+            Trend(
+                title="funny toddler fails shorts",
+                source="test",
+                metadata={"source_language": "en"},
+            )
+        ],
+        analyzed_videos=[
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Funny toddler short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+    )
+
+    try:
+        DownloadVideosStage(settings, BotWallProvider()).run(context)
+    except RuntimeError as exc:
+        assert "bot-check wall" in str(exc)
+        assert "GitHub-hosted runner IPs are still blocked" in str(exc)
+    else:
+        raise AssertionError("download stage should report the YouTube bot wall")
 
 
 def test_clip_hash_distance_detects_exact_and_near_duplicates() -> None:

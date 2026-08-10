@@ -34,6 +34,26 @@ from viral_pipeline.source_history import SourceHistory
 LOGGER = logging.getLogger(__name__)
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_BOT_WALL_MARKERS = (
+    "sign in to confirm you",
+    "not a bot",
+)
+
+
+def _called_process_output(exc: subprocess.CalledProcessError) -> str:
+    return "\n".join(
+        str(part)
+        for part in (getattr(exc, "stdout", None), getattr(exc, "stderr", None))
+        if part
+    )
+
+
+def _is_youtube_bot_wall(exc: BaseException) -> bool:
+    if isinstance(exc, subprocess.CalledProcessError):
+        haystack = f"{exc} {_called_process_output(exc)}".lower()
+    else:
+        haystack = str(exc).lower()
+    return all(marker in haystack for marker in YOUTUBE_BOT_WALL_MARKERS)
 
 
 def _dedupe_videos(videos: list[YouTubeVideo]) -> list[YouTubeVideo]:
@@ -721,10 +741,24 @@ class DownloadVideosStage(PipelineStage):
                 failed_video = video.model_copy(deep=True)
                 failed_video.metadata["download_failed"] = True
                 failed_video.metadata["download_error"] = str(exc)
+                if isinstance(exc, subprocess.CalledProcessError):
+                    failed_video.metadata["download_stderr"] = _called_process_output(exc)[-2000:]
+                failed_video.metadata["download_error_kind"] = (
+                    "youtube_bot_wall" if _is_youtube_bot_wall(exc) else "download_error"
+                )
                 failed.append(failed_video)
                 LOGGER.warning("Skipping failed download for %s: %s", video.id, exc)
                 continue
         if not downloaded:
+            if failed and all(
+                video.metadata.get("download_error_kind") == "youtube_bot_wall"
+                for video in failed
+            ):
+                raise RuntimeError(
+                    "No source videos could be downloaded: YouTube returned its bot-check "
+                    "wall for every candidate on this runner. GitHub-hosted runner IPs are "
+                    "still blocked even with cookies, mweb, and the bgutil PO-token provider."
+                )
             raise RuntimeError("No source videos could be downloaded")
         context.analyzed_videos = downloaded
         SourceHistory(self.settings.source_history_path).mark_videos_seen(
