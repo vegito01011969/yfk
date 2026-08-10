@@ -39,7 +39,29 @@ The workflow currently sets `DOWNLOAD_BACKEND=colab`, so GitHub Actions still or
 6. Runs `yt-dlp` inside Colab and downloads a zip archive containing the resulting media/info files back to the GitHub runner.
 7. Stops the Colab session in a `finally` path.
 
-By default, the Colab backend does not upload `YOUTUBE_COOKIES_TXT` into Colab. Set `COLAB_UPLOAD_YOUTUBE_COOKIES=true` only after explicitly accepting that the YouTube cookies secret will be copied to Google's Colab VM for the download attempt.
+`COLAB_UPLOAD_YOUTUBE_COOKIES=true` uploads `YOUTUBE_COOKIES_TXT` into the Colab VM for the download attempt. This copies the browser-derived YouTube cookies secret to Google's Colab runtime, so rotate the secret if you later disable this experiment.
+
+To create `COLAB_ADC_JSON`, install the Google Cloud CLI locally and run:
+
+```bash
+gcloud auth application-default login \
+  --scopes=openid,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/colaboratory
+```
+
+After browser authorization completes, copy the full contents of this file into the GitHub repository secret `COLAB_ADC_JSON`:
+
+```bash
+cat ~/.config/gcloud/application_default_credentials.json
+```
+
+Then test locally:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/application_default_credentials.json"
+colab --auth=adc sessions
+```
+
+If that command lists sessions or returns an empty list without an auth error, the same JSON is ready for GitHub Actions.
 
 This is an experiment. Colab is quota-based, user-account-backed infrastructure and may not be reliable as a 24/7 production worker. If Colab also hits YouTube's bot wall or Colab auth is not suitable for scheduled automation, use a controlled external runner/VPS where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally.
 
