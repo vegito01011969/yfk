@@ -751,7 +751,13 @@ class DownloadVideosStage(PipelineStage):
                     "youtube_bot_wall" if _is_youtube_bot_wall(exc) else "download_error"
                 )
                 failed.append(failed_video)
-                LOGGER.warning("Skipping failed download for %s: %s", video.id, exc)
+                output = (
+                    f"\n{_called_process_output(exc)[-1200:]}"
+                    if isinstance(exc, subprocess.CalledProcessError)
+                    and _called_process_output(exc)
+                    else ""
+                )
+                LOGGER.warning("Skipping failed download for %s: %s%s", video.id, exc, output)
                 continue
         if not downloaded:
             if failed and all(

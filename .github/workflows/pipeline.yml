@@ -21,6 +21,7 @@ jobs:
       CI: "true"
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
+      MAX_DOWNLOAD_VIDEOS: "3"
       ENABLE_YOUTUBE_UPLOAD: "true"
       YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"
       YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS: "false"

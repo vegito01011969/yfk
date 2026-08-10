@@ -1122,14 +1122,24 @@ class ColabYtDlpVideoDownloadProvider:
         if self.settings.colab_cli_config_path:
             command.extend(["--config", str(self.settings.colab_cli_config_path)])
         command.extend(args)
-        return subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            input=input_text,
-            timeout=self.settings.colab_command_timeout_seconds,
-        )
+        try:
+            return subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                input=input_text,
+                timeout=self.settings.colab_command_timeout_seconds,
+            )
+        except subprocess.CalledProcessError as exc:
+            output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
+            if output:
+                LOGGER.warning(
+                    "Colab command failed (%s):\n%s",
+                    " ".join(command),
+                    output[-COMMAND_OUTPUT_SNIPPET_CHARS:],
+                )
+            raise
 
     def _find_download(self, video_id: str, output_dir: Path) -> Path:
         candidates = [
