@@ -732,9 +732,14 @@ class DownloadVideosStage(PipelineStage):
             else None
         )
         language = str(selected_language) if selected_language else None
+        attempts = 0
+        max_attempts = self.settings.max_download_attempts or len(context.analyzed_videos)
         for video in _dedupe_videos(context.analyzed_videos):
             if len(downloaded) >= self.settings.max_download_videos:
                 break
+            if attempts >= max_attempts:
+                break
+            attempts += 1
             try:
                 downloaded.append(self.provider.download(video, download_dir / video.id))
             except (

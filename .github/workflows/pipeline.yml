@@ -22,6 +22,7 @@ jobs:
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
       MAX_DOWNLOAD_VIDEOS: "3"
+      MAX_DOWNLOAD_ATTEMPTS: "3"
       ENABLE_YOUTUBE_UPLOAD: "true"
       YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"
       YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS: "false"
@@ -72,6 +73,7 @@ jobs:
         run: |
           python -m pip install -e ".[media,ai]"
           python -m pip install "google-colab-cli"
+          python -m pip install "jupyter-kernel-client @ git+https://github.com/googlecolab/jupyter-kernel-client.git@f18e982c3265df5e923aa9def101ab3fd737e139"
           python -m pip show yt-dlp google-colab-cli
           colab version
 

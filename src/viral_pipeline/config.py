@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     selected_trend_count: int = 1
     max_videos_per_trend: int = 20
     max_download_videos: int = 10
+    max_download_attempts: int = 0
     youtube_search_pool_size: int = 50
     max_clips_per_video: int = 8
     max_clips: int = 5

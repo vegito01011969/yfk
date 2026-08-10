@@ -303,6 +303,40 @@ def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Pat
     assert history["videos"] == {}
 
 
+def test_download_stage_respects_max_download_attempts(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.max_download_attempts = 2
+    attempted: list[str] = []
+
+    class AlwaysFailProvider:
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            attempted.append(video.id)
+            raise FileNotFoundError(video.id)
+
+    context = PipelineContext(
+        run_id="download-attempt-limit-test",
+        workdir=tmp_path,
+        analyzed_videos=[
+            YouTubeVideo(
+                id=f"video-{index}",
+                trend_id="trend-1",
+                title=f"Funny toddler short {index}",
+                url=f"https://www.youtube.com/watch?v=video-{index}",
+            )
+            for index in range(5)
+        ],
+    )
+
+    try:
+        DownloadVideosStage(settings, AlwaysFailProvider()).run(context)
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("download stage should fail when all limited attempts fail")
+
+    assert attempted == ["video-0", "video-1"]
+
+
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 

@@ -32,14 +32,15 @@ Hosted-runner YouTube download setup:
 The workflow currently sets `DOWNLOAD_BACKEND=colab`, so GitHub Actions still orchestrates the pipeline, but the `download_videos` stage executes `yt-dlp` inside a fresh Google Colab VM:
 
 1. Installs `google-colab-cli` on the GitHub runner.
-2. Authenticates the Colab CLI with `COLAB_CLI_AUTH=adc` and `COLAB_ADC_JSON`.
-3. Creates a fresh Colab session per source video download attempt.
-4. Uploads a small JSON job file and the Colab worker script.
-5. Installs `yt-dlp>=2025.9.26` and `yt-dlp-getpot-wpc==1.0.0` inside Colab.
-6. Runs `yt-dlp` inside Colab and downloads a zip archive containing the resulting media/info files back to the GitHub runner.
-7. Stops the Colab session in a `finally` path.
+2. Installs Google's fork of `jupyter-kernel-client`, because the Colab CLI expects `jupyter_kernel_client.KernelClient`.
+3. Authenticates the Colab CLI with `COLAB_CLI_AUTH=adc` and `COLAB_ADC_JSON`.
+4. Creates a fresh Colab session per source video download attempt.
+5. Uploads a small JSON job file and the Colab worker script.
+6. Installs `yt-dlp>=2025.9.26` and `yt-dlp-getpot-wpc==1.0.0` inside Colab.
+7. Runs `yt-dlp` inside Colab and downloads a zip archive containing the resulting media/info files back to the GitHub runner.
+8. Stops the Colab session in a `finally` path.
 
-While this backend is experimental, the scheduled workflow sets `MAX_DOWNLOAD_VIDEOS=3` to limit Colab session churn during failed runs.
+While this backend is experimental, the scheduled workflow sets `MAX_DOWNLOAD_VIDEOS=3` and `MAX_DOWNLOAD_ATTEMPTS=3` to limit Colab session churn during failed runs.
 
 `COLAB_UPLOAD_YOUTUBE_COOKIES=true` uploads `YOUTUBE_COOKIES_TXT` into the Colab VM for the download attempt. This copies the browser-derived YouTube cookies secret to Google's Colab runtime, so rotate the secret if you later disable this experiment.
 
