@@ -173,6 +173,39 @@ def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch
     assert "youtube:player_client=web" in commands[0]
 
 
+def test_ytdlp_download_supports_multiple_extractor_args(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.yt_dlp_extractor_args = "\n".join(
+        [
+            "youtube:player_client=mweb",
+            "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
+        ]
+    )
+    provider = YtDlpVideoDownloadProvider(settings)
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *, check: bool) -> None:
+        commands.append(command)
+        output_dir = tmp_path / "downloads"
+        (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
+
+    monkeypatch.setattr("viral_pipeline.providers.subprocess.run", fake_run)
+
+    provider.download(
+        YouTubeVideo(
+            id="video-1",
+            trend_id="trend-1",
+            title="Funny toddler short",
+            url="https://www.youtube.com/watch?v=video-1",
+        ),
+        tmp_path / "downloads",
+    )
+
+    assert commands[0].count("--extractor-args") == 2
+    assert "youtube:player_client=mweb" in commands[0]
+    assert "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416" in commands[0]
+
+
 def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 

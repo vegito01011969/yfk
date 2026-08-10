@@ -998,7 +998,10 @@ class YtDlpVideoDownloadProvider:
         if self.settings.yt_dlp_js_runtimes:
             command.extend(["--js-runtimes", self.settings.yt_dlp_js_runtimes])
         if self.settings.yt_dlp_extractor_args:
-            command.extend(["--extractor-args", self.settings.yt_dlp_extractor_args])
+            for extractor_args in self.settings.yt_dlp_extractor_args.splitlines():
+                extractor_args = extractor_args.strip()
+                if extractor_args:
+                    command.extend(["--extractor-args", extractor_args])
         command.append(video.url)
         subprocess.run(command, check=True)
         downloaded = self._find_download(video.id, output_dir)

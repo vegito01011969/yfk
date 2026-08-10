@@ -31,7 +31,7 @@ Hosted-runner YouTube download setup:
 1. Installs `yt-dlp>=2025.5.22`, which supports PO-token provider plugins.
 2. Installs `bgutil-ytdlp-pot-provider==1.3.1` into the workflow Python environment.
 3. Starts the matching `brainicism/bgutil-ytdlp-pot-provider:1.3.1` Docker service on port `4416`.
-4. Uses `YT_DLP_EXTRACTOR_ARGS=youtube:player_client=mweb`, so `yt-dlp` can use the recommended mobile-web client path with PO-token support.
+4. Uses multiline `YT_DLP_EXTRACTOR_ARGS` so `yt-dlp` receives both `youtube:player_client=mweb` and `youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416`.
 5. Still passes `YOUTUBE_COOKIES_TXT`, Node.js, and `YT_DLP_JS_RUNTIMES=node`.
 
 If hosted downloads keep failing with the same bot-wall error, the remaining reliable option is to run the workflow on a self-hosted runner or another controlled machine/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally.
@@ -41,7 +41,7 @@ Runtime behavior:
 - Installs Python dependencies, `ffmpeg`, and sets up Node.js for `yt-dlp` JavaScript challenges.
 - Starts the bgutil PO-token provider service for `yt-dlp`.
 - Sets `YT_DLP_JS_RUNTIMES=node` so `yt-dlp` actually uses the installed Node.js runtime.
-- Sets `YT_DLP_EXTRACTOR_ARGS=youtube:player_client=mweb` so YouTube downloads use the mobile-web client path with PO-token support.
+- Sets multiline `YT_DLP_EXTRACTOR_ARGS` so YouTube downloads use the mobile-web client path and the local bgutil HTTP provider.
 - Validates that `YOUTUBE_COOKIES_TXT` is raw Netscape cookies.txt content before the pipeline starts.
 - Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
 - Writes OAuth JSON and YouTube cookies secrets into ignored files under `secrets/`.
