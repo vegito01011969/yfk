@@ -757,7 +757,8 @@ class DownloadVideosStage(PipelineStage):
                 raise RuntimeError(
                     "No source videos could be downloaded: YouTube returned its bot-check "
                     "wall for every candidate on this runner. GitHub-hosted runner IPs are "
-                    "still blocked even with cookies, mweb, and the bgutil PO-token provider."
+                    "still blocked even with cookies, alternate YouTube clients, and the "
+                    "configured PO-token provider."
                 )
             raise RuntimeError("No source videos could be downloaded")
         context.analyzed_videos = downloaded

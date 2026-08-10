@@ -323,7 +323,7 @@ def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
         DownloadVideosStage(settings, BotWallProvider()).run(context)
     except RuntimeError as exc:
         assert "bot-check wall" in str(exc)
-        assert "GitHub-hosted runner IPs are still blocked" in str(exc)
+        assert "configured PO-token provider" in str(exc)
     else:
         raise AssertionError("download stage should report the YouTube bot wall")
 

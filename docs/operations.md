@@ -31,11 +31,11 @@ Hosted-runner YouTube download setup:
 1. Installs `yt-dlp>=2025.9.26`, which is required by the browser-backed WPC provider.
 2. Installs `yt-dlp-getpot-wpc==1.0.0` into the workflow Python environment.
 3. Locates Chrome/Chromium on the GitHub-hosted runner and passes its path to the provider.
-4. Uses multiline `YT_DLP_EXTRACTOR_ARGS` so `yt-dlp` receives both `youtube:player_client=mweb` and `youtubepot-wpc:browser_path=...`.
+4. Uses multiline `YT_DLP_EXTRACTOR_ARGS` so `yt-dlp` receives both `youtube:player_client=mweb,web_safari,web_embedded,tv_simply,android_vr` and `youtubepot-wpc:browser_path=...`.
 5. Still passes `YOUTUBE_COOKIES_TXT`, Node.js, and `YT_DLP_JS_RUNTIMES=node`.
 6. Enables `YT_DLP_VERBOSE=true` so failed runs show whether the WPC provider was loaded and used.
 
-The previous bgutil provider path was configured correctly and still hit the YouTube bot wall on GitHub-hosted runners. WPC is the remaining yt-dlp-native option because it uses a real Chrome/Chromium browser to mint PO tokens. If this also fails, the remaining reliable options are to run the workflow on a controlled external runner/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally, or to replace YouTube downloads with a different licensed media source.
+The previous bgutil provider path was configured correctly and still hit the YouTube bot wall on GitHub-hosted runners. WPC is the remaining yt-dlp-native provider option because it uses a real Chrome/Chromium browser to mint PO tokens. The workflow also asks yt-dlp to try several YouTube clients in one extraction attempt. If this also fails, the remaining reliable options are to run the workflow on a controlled external runner/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally, or to replace YouTube downloads with a different licensed media source.
 
 Runtime behavior:
 

@@ -80,7 +80,7 @@ jobs:
           "$chrome_path" --version
           {
             echo "YT_DLP_EXTRACTOR_ARGS<<EOF"
-            echo "youtube:player_client=mweb"
+            echo "youtube:player_client=mweb,web_safari,web_embedded,tv_simply,android_vr"
             echo "youtubepot-wpc:browser_path=$chrome_path"
             echo "EOF"
           } >> "$GITHUB_ENV"
