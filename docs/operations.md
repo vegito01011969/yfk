@@ -49,6 +49,7 @@ Runtime behavior:
 - Uploads metadata-only diagnostics for failed runs with 3-day retention.
 - Runs `viral-pipeline cleanup --yes` to remove bulky/resumable state.
 - Saves only updated `data/source_video_history.json` for the next scheduled run.
+- Does not mark source videos as used when every download fails, because that usually indicates an infrastructure-wide download problem rather than bad individual source videos.
 
 Tests and lint run separately in `.github/workflows/ci.yml` on push and pull request. They are intentionally not part of the 4-hour upload workflow.
 
@@ -122,7 +123,7 @@ viral-pipeline run --latest --stage rank_events
 
 ## Scheduled Automation Notes
 
-The workflow intentionally uses `--no-resume` so every 4-hour schedule creates a new run. Cross-run duplicate avoidance comes from the cached `data/source_video_history.json`, not from resuming the previous pipeline run.
+The workflow intentionally uses `--no-resume` so every 4-hour schedule creates a new run. Cross-run duplicate avoidance comes from the cached `data/source_video_history.json`, not from resuming the previous pipeline run. Only successful downloads, and failed downloads from a partially successful run, are recorded as source history.
 
 After each scheduled run, cleanup removes:
 

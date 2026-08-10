@@ -725,14 +725,6 @@ class DownloadVideosStage(PipelineStage):
                 LOGGER.warning("Skipping failed download for %s: %s", video.id, exc)
                 continue
         if not downloaded:
-            if failed:
-                SourceHistory(self.settings.source_history_path).mark_videos_seen(
-                    failed,
-                    run_id=context.run_id,
-                    query=query,
-                    language=language,
-                    stage="download_failed",
-                )
             raise RuntimeError("No source videos could be downloaded")
         context.analyzed_videos = downloaded
         SourceHistory(self.settings.source_history_path).mark_videos_seen(

@@ -241,7 +241,7 @@ def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Pat
         raise AssertionError("download stage should fail when no downloads succeed")
 
     history = SourceHistory(settings.source_history_path)._data()
-    assert history["videos"]["video-1"]["stage"] == "download_failed"
+    assert history["videos"] == {}
 
 
 def test_clip_hash_distance_detects_exact_and_near_duplicates() -> None:
