@@ -67,6 +67,7 @@ This is an experiment. Colab is quota-based, user-account-backed infrastructure 
 
 Runtime behavior:
 
+- Uses Python 3.12 in the scheduled media workflow because `google-colab-cli` currently requires Python 3.12+.
 - Installs Python dependencies, `ffmpeg`, and sets up Node.js for `yt-dlp` JavaScript challenges.
 - Uses Colab as the download execution backend when `DOWNLOAD_BACKEND=colab`.
 - Sets `YT_DLP_JS_RUNTIMES=node` so `yt-dlp` actually uses the installed Node.js runtime.
