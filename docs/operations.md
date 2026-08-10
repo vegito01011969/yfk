@@ -4,7 +4,7 @@
 
 The production workflow is `.github/workflows/pipeline.yml`. It runs automatically every 4 hours and can also be started manually from the GitHub Actions UI.
 
-The media workflow currently runs on GitHub-hosted Ubuntu runners with an experimental YouTube PO-token setup. YouTube commonly blocks shared runner IPs with “Sign in to confirm you’re not a bot,” even when valid cookies, a JavaScript runtime, the mobile-web client, and a PO-token provider are provided.
+The media workflow currently runs on GitHub-hosted Ubuntu runners with an experimental YouTube WebPoClient PO-token setup. YouTube commonly blocks shared runner IPs with “Sign in to confirm you’re not a bot,” so this hosted path is best-effort rather than guaranteed.
 
 Schedule:
 
@@ -28,20 +28,21 @@ Required GitHub repository secrets:
 
 Hosted-runner YouTube download setup:
 
-1. Installs `yt-dlp>=2025.5.22`, which supports PO-token provider plugins.
-2. Installs `bgutil-ytdlp-pot-provider==1.3.1` into the workflow Python environment.
-3. Starts the matching `brainicism/bgutil-ytdlp-pot-provider:1.3.1` Docker service on port `4416`.
-4. Uses multiline `YT_DLP_EXTRACTOR_ARGS` so `yt-dlp` receives both `youtube:player_client=mweb` and `youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416`.
+1. Installs `yt-dlp>=2025.9.26`, which is required by the browser-backed WPC provider.
+2. Installs `yt-dlp-getpot-wpc==1.0.0` into the workflow Python environment.
+3. Locates Chrome/Chromium on the GitHub-hosted runner and passes its path to the provider.
+4. Uses multiline `YT_DLP_EXTRACTOR_ARGS` so `yt-dlp` receives both `youtube:player_client=mweb` and `youtubepot-wpc:browser_path=...`.
 5. Still passes `YOUTUBE_COOKIES_TXT`, Node.js, and `YT_DLP_JS_RUNTIMES=node`.
+6. Enables `YT_DLP_VERBOSE=true` so failed runs show whether the WPC provider was loaded and used.
 
-Hosted GitHub Actions downloads have been observed failing with the same bot-wall error even after the PO-token provider was configured correctly. The remaining reliable options are to run the workflow on a controlled external runner/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally, or to replace YouTube downloads with a different licensed media source.
+The previous bgutil provider path was configured correctly and still hit the YouTube bot wall on GitHub-hosted runners. WPC is the remaining yt-dlp-native option because it uses a real Chrome/Chromium browser to mint PO tokens. If this also fails, the remaining reliable options are to run the workflow on a controlled external runner/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally, or to replace YouTube downloads with a different licensed media source.
 
 Runtime behavior:
 
 - Installs Python dependencies, `ffmpeg`, and sets up Node.js for `yt-dlp` JavaScript challenges.
-- Starts the bgutil PO-token provider service for `yt-dlp`.
+- Configures the WPC browser PO-token provider for `yt-dlp`.
 - Sets `YT_DLP_JS_RUNTIMES=node` so `yt-dlp` actually uses the installed Node.js runtime.
-- Sets multiline `YT_DLP_EXTRACTOR_ARGS` so YouTube downloads use the mobile-web client path and the local bgutil HTTP provider.
+- Sets multiline `YT_DLP_EXTRACTOR_ARGS` so YouTube downloads use the mobile-web client path and the WPC browser provider.
 - Validates that `YOUTUBE_COOKIES_TXT` is raw Netscape cookies.txt content before the pipeline starts.
 - Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
 - Writes OAuth JSON and YouTube cookies secrets into ignored files under `secrets/`.

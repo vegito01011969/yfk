@@ -218,6 +218,38 @@ def test_ytdlp_download_supports_multiple_extractor_args(tmp_path: Path, monkeyp
     assert "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416" in commands[0]
 
 
+def test_ytdlp_download_can_enable_verbose_output(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.yt_dlp_verbose = True
+    provider = YtDlpVideoDownloadProvider(settings)
+    commands: list[list[str]] = []
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> None:
+        commands.append(command)
+        output_dir = tmp_path / "downloads"
+        (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
+
+    monkeypatch.setattr("viral_pipeline.providers.subprocess.run", fake_run)
+
+    provider.download(
+        YouTubeVideo(
+            id="video-1",
+            trend_id="trend-1",
+            title="Funny toddler short",
+            url="https://www.youtube.com/watch?v=video-1",
+        ),
+        tmp_path / "downloads",
+    )
+
+    assert "--verbose" in commands[0]
+
+
 def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 

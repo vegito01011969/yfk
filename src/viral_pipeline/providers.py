@@ -1003,6 +1003,8 @@ class YtDlpVideoDownloadProvider:
                 extractor_args = extractor_args.strip()
                 if extractor_args:
                     command.extend(["--extractor-args", extractor_args])
+        if self.settings.yt_dlp_verbose:
+            command.append("--verbose")
         command.append(video.url)
         try:
             subprocess.run(
