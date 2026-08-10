@@ -80,11 +80,19 @@ class Settings(BaseSettings):
     groqcloud_model: str = "openai/gpt-oss-20b"
     groqcloud_base_url: str = "https://api.groq.com/openai/v1"
     use_real_media: bool = False
+    download_backend: str = "local"
     yt_dlp_format: str = "bv*[height<=720]+ba/b[height<=720]/best[height<=720]/best"
     yt_dlp_cookies_path: Path | None = None
     yt_dlp_js_runtimes: str | None = None
     yt_dlp_extractor_args: str | None = None
     yt_dlp_verbose: bool = False
+    colab_cli_auth: str = "adc"
+    colab_cli_config_path: Path | None = None
+    colab_session_prefix: str = "viral-pipeline"
+    colab_remote_dir: str = "/content/viral_pipeline_download"
+    colab_command_timeout_seconds: int = 900
+    colab_yt_dlp_requirement: str = "yt-dlp>=2025.9.26"
+    colab_upload_youtube_cookies: bool = False
     render_width: int = 1080
     render_height: int = 1920
     render_fps: int = 30

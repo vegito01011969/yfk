@@ -6,10 +6,12 @@ import logging
 import re
 import subprocess
 import sys
+import zipfile
 from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
+from uuid import uuid4
 
 import requests
 
@@ -1040,6 +1042,106 @@ class YtDlpVideoDownloadProvider:
         return sorted(candidates, key=lambda path: path.stat().st_size, reverse=True)[0]
 
 
+class ColabYtDlpVideoDownloadProvider:
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        session = f"{self.settings.colab_session_prefix}-{video.id}-{uuid4().hex[:8]}"
+        remote_dir = self.settings.colab_remote_dir.rstrip("/")
+        job_path = output_dir / "colab_job.json"
+        result_zip = output_dir / "colab_result.zip"
+        worker_path = Path("scripts/colab_ytdlp_worker.py")
+        extractor_args = [
+            value.strip()
+            for value in (self.settings.yt_dlp_extractor_args or "").splitlines()
+            if value.strip()
+        ]
+        job_path.write_text(
+            json.dumps(
+                {
+                    "video_id": video.id,
+                    "url": video.url,
+                    "format": self.settings.yt_dlp_format,
+                    "js_runtimes": self.settings.yt_dlp_js_runtimes,
+                    "extractor_args": extractor_args,
+                    "verbose": self.settings.yt_dlp_verbose,
+                    "yt_dlp_requirement": self.settings.colab_yt_dlp_requirement,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
+        try:
+            self._run(["new", "-s", session])
+            self._run(
+                ["exec", "-s", session],
+                input_text=(
+                    "import pathlib\n"
+                    f"pathlib.Path('{remote_dir}').mkdir(parents=True, exist_ok=True)\n"
+                ),
+            )
+            self._run(["upload", "-s", session, str(job_path), f"{remote_dir}/job.json"])
+            cookies_path = self.settings.yt_dlp_cookies_path
+            if (
+                self.settings.colab_upload_youtube_cookies
+                and cookies_path
+                and cookies_path.exists()
+            ):
+                self._run(["upload", "-s", session, str(cookies_path), f"{remote_dir}/cookies.txt"])
+            self._run(["exec", "-s", session, "-f", str(worker_path)])
+            self._run(["download", "-s", session, f"{remote_dir}/result.zip", str(result_zip)])
+        finally:
+            try:
+                self._run(["stop", "-s", session])
+            except subprocess.CalledProcessError as exc:
+                LOGGER.warning("Failed to stop Colab session %s: %s", session, exc)
+
+        if not result_zip.exists():
+            raise FileNotFoundError(f"Colab did not return a result archive for {video.id}")
+        with zipfile.ZipFile(result_zip) as archive:
+            archive.extractall(output_dir)
+
+        downloaded = self._find_download(video.id, output_dir)
+        updated = video.model_copy(deep=True)
+        updated.downloaded_path = downloaded
+        updated.metadata["download_provider"] = "colab-yt-dlp"
+        updated.metadata["downloaded_path"] = str(downloaded)
+        updated.metadata["colab_session"] = session
+        return updated
+
+    def _run(
+        self,
+        args: list[str],
+        input_text: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        command = ["colab", f"--auth={self.settings.colab_cli_auth}"]
+        if self.settings.colab_cli_config_path:
+            command.extend(["--config", str(self.settings.colab_cli_config_path)])
+        command.extend(args)
+        return subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            input=input_text,
+            timeout=self.settings.colab_command_timeout_seconds,
+        )
+
+    def _find_download(self, video_id: str, output_dir: Path) -> Path:
+        candidates = [
+            path
+            for path in output_dir.glob(f"{video_id}.*")
+            if path.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}
+        ]
+        if not candidates:
+            raise FileNotFoundError(f"Colab yt-dlp did not produce a media file for {video_id}")
+        return sorted(candidates, key=lambda path: path.stat().st_size, reverse=True)[0]
+
+
 class LocalVideoDownloadProvider:
     def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1616,11 +1718,12 @@ def build_providers(
         if settings.youtube_api_key
         else LocalYouTubeProvider()
     )
-    download_provider: VideoDownloadProvider = (
-        YtDlpVideoDownloadProvider(settings)
-        if settings.use_real_media
-        else LocalVideoDownloadProvider()
-    )
+    if settings.use_real_media and settings.download_backend == "colab":
+        download_provider: VideoDownloadProvider = ColabYtDlpVideoDownloadProvider(settings)
+    elif settings.use_real_media:
+        download_provider = YtDlpVideoDownloadProvider(settings)
+    else:
+        download_provider = LocalVideoDownloadProvider()
     media_provider: MediaProvider = (
         YtDlpFfmpegMediaProvider(settings)
         if settings.use_real_media

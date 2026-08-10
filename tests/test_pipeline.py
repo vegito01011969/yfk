@@ -17,7 +17,12 @@ from viral_pipeline.domain import (
     Trend,
     YouTubeVideo,
 )
-from viral_pipeline.providers import YtDlpFfmpegMediaProvider, YtDlpVideoDownloadProvider
+from viral_pipeline.providers import (
+    ColabYtDlpVideoDownloadProvider,
+    YtDlpFfmpegMediaProvider,
+    YtDlpVideoDownloadProvider,
+    build_providers,
+)
 from viral_pipeline.runner import PipelineRunner
 from viral_pipeline.source_history import SourceHistory
 from viral_pipeline.stages import (
@@ -248,6 +253,16 @@ def test_ytdlp_download_can_enable_verbose_output(tmp_path: Path, monkeypatch) -
     )
 
     assert "--verbose" in commands[0]
+
+
+def test_build_providers_can_select_colab_download_backend(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "colab"
+
+    providers = build_providers(settings)
+
+    assert isinstance(providers[2], ColabYtDlpVideoDownloadProvider)
 
 
 def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:

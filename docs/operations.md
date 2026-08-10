@@ -19,6 +19,7 @@ Required GitHub repository secrets:
 - `YOUTUBE_OAUTH_CLIENT_SECRETS_JSON`
 - `YOUTUBE_OAUTH_TOKEN_JSON`
 - `YOUTUBE_COOKIES_TXT`
+- `COLAB_ADC_JSON` when `DOWNLOAD_BACKEND=colab`
 
 `YOUTUBE_OAUTH_CLIENT_SECRETS_JSON` is the full contents of the Google OAuth desktop client JSON file.
 
@@ -28,22 +29,27 @@ Required GitHub repository secrets:
 
 Hosted-runner YouTube download setup:
 
-1. Installs `yt-dlp>=2025.9.26`, which is required by the browser-backed WPC provider.
-2. Installs `yt-dlp-getpot-wpc==1.0.0` into the workflow Python environment.
-3. Locates Chrome/Chromium on the GitHub-hosted runner and passes its path to the provider.
-4. Uses multiline `YT_DLP_EXTRACTOR_ARGS` so `yt-dlp` receives both `youtube:player_client=mweb,web_safari,web_embedded,tv_simply,android_vr` and `youtubepot-wpc:browser_path=...`.
-5. Still passes `YOUTUBE_COOKIES_TXT`, Node.js, and `YT_DLP_JS_RUNTIMES=node`.
-6. Enables `YT_DLP_VERBOSE=true` so failed runs show whether the WPC provider was loaded and used.
+The workflow currently sets `DOWNLOAD_BACKEND=colab`, so GitHub Actions still orchestrates the pipeline, but the `download_videos` stage executes `yt-dlp` inside a fresh Google Colab VM:
 
-The previous bgutil provider path was configured correctly and still hit the YouTube bot wall on GitHub-hosted runners. WPC is the remaining yt-dlp-native provider option because it uses a real Chrome/Chromium browser to mint PO tokens. The workflow also asks yt-dlp to try several YouTube clients in one extraction attempt. If this also fails, the remaining reliable options are to run the workflow on a controlled external runner/network where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally, or to replace YouTube downloads with a different licensed media source.
+1. Installs `google-colab-cli` on the GitHub runner.
+2. Authenticates the Colab CLI with `COLAB_CLI_AUTH=adc` and `COLAB_ADC_JSON`.
+3. Creates a fresh Colab session per source video download attempt.
+4. Uploads a small JSON job file and the Colab worker script.
+5. Installs `yt-dlp>=2025.9.26` and `yt-dlp-getpot-wpc==1.0.0` inside Colab.
+6. Runs `yt-dlp` inside Colab and downloads a zip archive containing the resulting media/info files back to the GitHub runner.
+7. Stops the Colab session in a `finally` path.
+
+By default, the Colab backend does not upload `YOUTUBE_COOKIES_TXT` into Colab. Set `COLAB_UPLOAD_YOUTUBE_COOKIES=true` only after explicitly accepting that the YouTube cookies secret will be copied to Google's Colab VM for the download attempt.
+
+This is an experiment. Colab is quota-based, user-account-backed infrastructure and may not be reliable as a 24/7 production worker. If Colab also hits YouTube's bot wall or Colab auth is not suitable for scheduled automation, use a controlled external runner/VPS where `yt-dlp --cookies cookies.txt "https://www.youtube.com/watch?v=..."` works normally.
 
 Runtime behavior:
 
 - Installs Python dependencies, `ffmpeg`, and sets up Node.js for `yt-dlp` JavaScript challenges.
-- Configures the WPC browser PO-token provider for `yt-dlp`.
+- Uses Colab as the download execution backend when `DOWNLOAD_BACKEND=colab`.
 - Sets `YT_DLP_JS_RUNTIMES=node` so `yt-dlp` actually uses the installed Node.js runtime.
-- Sets multiline `YT_DLP_EXTRACTOR_ARGS` so YouTube downloads use the mobile-web client path and the WPC browser provider.
 - Validates that `YOUTUBE_COOKIES_TXT` is raw Netscape cookies.txt content before the pipeline starts.
+- Validates Colab CLI access before the pipeline starts when using the Colab backend.
 - Restores cached `data/source_video_history.json` so source-video history survives across scheduled runs.
 - Writes OAuth JSON and YouTube cookies secrets into ignored files under `secrets/`.
 - Runs `viral-pipeline run --no-resume` with real media and public YouTube upload enabled.

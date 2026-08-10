@@ -737,7 +737,11 @@ class DownloadVideosStage(PipelineStage):
                 break
             try:
                 downloaded.append(self.provider.download(video, download_dir / video.id))
-            except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            except (
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+                FileNotFoundError,
+            ) as exc:
                 failed_video = video.model_copy(deep=True)
                 failed_video.metadata["download_failed"] = True
                 failed_video.metadata["download_error"] = str(exc)
