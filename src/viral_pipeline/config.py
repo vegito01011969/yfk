@@ -5,7 +5,6 @@ from pathlib import Path
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 KIDS_FUNNY_ACTIVITY_SEED_QUERIES = (
     "viral challenge,tiktok challenge,youtube shorts challenge,"
     "dance challenge,people trying trend,challenge compilation,"
@@ -141,7 +140,7 @@ class Settings(BaseSettings):
     local_tts_voice: str = "Samantha"
 
     @model_validator(mode="after")
-    def apply_domain_defaults(self) -> "Settings":
+    def apply_domain_defaults(self) -> Settings:
         if self.content_domain == "football":
             if not self.content_label:
                 self.content_label = "Football Moments"

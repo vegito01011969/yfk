@@ -32,8 +32,8 @@ from viral_pipeline.stages import (
     PreparePublishStage,
     RankEventsStage,
     UploadYouTubeStage,
-    _require_expected_upload_channel_for_domain,
     _clip_hash_distance,
+    _require_expected_upload_channel_for_domain,
     _validate_expected_upload_channel,
 )
 from viral_pipeline.storage import PipelineStore
