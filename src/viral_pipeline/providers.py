@@ -326,6 +326,75 @@ FOOTBALL_EXCLUDED_TERMS = {
     "trailer",
 }
 
+FOOTBALL_THEME_QUERIES: dict[str, list[str]] = {
+    "saves": [
+        "unreal football saves shorts",
+        "crazy football goalkeeper saves shorts",
+        "impossible football saves shorts",
+        "best football penalty saves shorts",
+    ],
+    "penalties": [
+        "epic football penalties shorts",
+        "dramatic football penalty shootout shorts",
+        "football penalty goals shorts",
+        "football penalty saves shorts",
+    ],
+    "passes": [
+        "insane football passes shorts",
+        "unbelievable football assists shorts",
+        "football through ball assists shorts",
+        "football no look passes shorts",
+    ],
+    "goals": [
+        "best football goals shorts",
+        "unbelievable football goals shorts",
+        "impossible football goals shorts",
+        "football long range goals shorts",
+    ],
+    "free_kicks": [
+        "impossible football free kicks shorts",
+        "best football free kick goals shorts",
+        "unbelievable football free kicks shorts",
+        "football curved free kick goals shorts",
+    ],
+    "comebacks": [
+        "legendary football comebacks shorts",
+        "football last minute comeback goals shorts",
+        "football stoppage time goals shorts",
+        "football last minute goals shorts",
+    ],
+    "skills": [
+        "football skills that shocked everyone shorts",
+        "football nutmeg skills shorts",
+        "insane football dribbling skills shorts",
+        "football skill moves shorts",
+    ],
+    "volleys": [
+        "football volley goals shorts",
+        "best football volleys shorts",
+        "unbelievable football volley goals shorts",
+        "football bicycle kick goals shorts",
+    ],
+    "clearances": [
+        "football goal line clearances shorts",
+        "unbelievable football clearances shorts",
+        "last second football clearances shorts",
+        "football defender goal line saves shorts",
+    ],
+    "cards": [
+        "football red card drama shorts",
+        "crazy football red cards shorts",
+        "football referee drama shorts",
+        "controversial football moments shorts",
+    ],
+    "moments": [
+        "unforgettable football moments shorts",
+        "emotional football moments shorts",
+        "shocking football moments shorts",
+        "football moments that shocked everyone shorts",
+    ],
+}
+
 
 class YouTubeApiError(RuntimeError):
     """Raised when a YouTube API call fails without exposing credentials."""
@@ -533,6 +602,36 @@ def _domain_search_query(query: str, settings: Settings | None) -> str:
     return query
 
 
+def _football_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("save", "goalkeeper", "keeper")):
+        return "saves"
+    if any(term in lowered for term in ("penalty", "penalties", "shootout")):
+        return "penalties"
+    if any(term in lowered for term in ("pass", "assist", "through ball", "no look")):
+        return "passes"
+    if any(term in lowered for term in ("free kick", "freekick")):
+        return "free_kicks"
+    if any(term in lowered for term in ("comeback", "last minute", "stoppage time")):
+        return "comebacks"
+    if any(term in lowered for term in ("skill", "dribble", "dribbling", "nutmeg")):
+        return "skills"
+    if any(term in lowered for term in ("volley", "bicycle kick")):
+        return "volleys"
+    if any(term in lowered for term in ("clearance", "clearances", "goal line")):
+        return "clearances"
+    if any(term in lowered for term in ("red card", "referee", "controversial", "drama")):
+        return "cards"
+    if any(term in lowered for term in ("goal", "goals", "finish", "finishes")):
+        return "goals"
+    return "moments"
+
+
+def _football_theme_search_queries(query: str) -> list[str]:
+    theme = _football_theme(query)
+    return [query, *FOOTBALL_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -558,29 +657,10 @@ def _shorts_search_queries(
         queries.append(_append_language_to_query(fallback, language))
         queries.append(_append_language_to_query("funny kids shorts", language))
     if settings and settings.content_domain == "football":
-        lowered = query.lower()
-        alternates: list[str]
-        if "save" in lowered or "goalkeeper" in lowered or "keeper" in lowered:
-            fallback = "best football saves shorts"
-            alternates = ["football goalkeeper saves shorts", "football penalty saves shorts"]
-        elif "skill" in lowered or "dribble" in lowered or "nutmeg" in lowered:
-            fallback = "incredible football skills shorts"
-            alternates = ["football dribbling skills shorts", "football nutmeg skills shorts"]
-        elif "fail" in lowered or "funny" in lowered:
-            fallback = "funny football fails shorts"
-            alternates = ["football fails shorts", "football funny moments shorts"]
-        elif "celebration" in lowered:
-            fallback = "football celebrations shorts"
-            alternates = ["football goal celebrations shorts"]
-        elif "last minute" in lowered or "comeback" in lowered:
-            fallback = "last minute football goals shorts"
-            alternates = ["football comeback goals shorts", "football stoppage time goals shorts"]
-        else:
-            fallback = "football goals shorts"
-            alternates = ["best football goals shorts", "unbelievable football goals shorts"]
-        queries.append(_append_language_to_query(fallback, language))
-        queries.extend(_append_language_to_query(alternate, language) for alternate in alternates)
-        queries.append(_append_language_to_query("viral football moments shorts", language))
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _football_theme_search_queries(query)
+        ]
 
     deduped: list[str] = []
     for item in queries:

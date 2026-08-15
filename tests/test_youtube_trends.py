@@ -8,6 +8,7 @@ from viral_pipeline.providers import (
     CompilationQueryProvider,
     YouTubeDataProvider,
     YouTubeTrendProvider,
+    _shorts_search_queries,
 )
 from viral_pipeline.source_history import SourceHistory
 
@@ -420,7 +421,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
 
     assert football.content_label == "Football Moments"
     assert football.source_languages == "en"
-    assert football.compilation_queries.split(",")[0] == "football goals shorts"
+    assert football.compilation_queries.split(",")[0] == "unreal football saves shorts"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -439,6 +440,24 @@ def test_football_compilation_query_provider_enforces_football_keyword(tmp_path)
         "football penalty saves shorts",
     ]
     assert trends[0].metadata["raw_query"] == "crazy goals shorts"
+
+
+def test_football_short_queries_stay_inside_selected_theme() -> None:
+    settings = Settings(_env_file=None, content_domain="football")
+
+    queries = _shorts_search_queries("unreal football saves shorts", "en", settings)
+
+    assert queries
+    assert all("football" in query.lower() for query in queries)
+    assert all(
+        any(term in query.lower() for term in ("save", "saves", "goalkeeper", "keeper"))
+        for query in queries
+    )
+    assert not any("viral football moments" in query.lower() for query in queries)
+    assert not any(
+        "football goals shorts" == query.lower().replace(" english", "")
+        for query in queries
+    )
 
 
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:
@@ -533,6 +552,10 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
     assert all(video.metadata["search_relevance_score"] >= 0.45 for video in videos)
     assert fake_client.search_queries
     assert all("football" in query.lower() for query in fake_client.search_queries)
+    assert not any(
+        "viral football moments" in query.lower()
+        for query in fake_client.search_queries
+    )
 
 
 def test_youtube_trend_provider_filters_generic_media_terms() -> None:

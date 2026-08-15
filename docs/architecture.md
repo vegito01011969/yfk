@@ -18,7 +18,8 @@ The pipeline is organized around independently replaceable stages. Each stage re
 Discovery:
 
 - `kids_funny` mode uses configurable short-video searches such as funny toddler fails, kids pranks, baby reactions, toddler bloopers, sibling moments, and kid mispronunciations.
-- `football` mode uses configurable short-video searches such as football goals, football skills, football saves, last-minute football goals, football fails, football celebrations, football comebacks, football referee moments, and football penalty saves.
+- `football` mode uses configurable short-video searches such as unreal football saves, epic football penalties, insane football passes, best football goals, free kicks, comebacks, nutmeg skills, and goal-line clearances.
+- Football search expands the selected query only within the same theme, so one run produces a coherent compilation instead of mixing unrelated football clips.
 - Football-mode search query generation defensively includes the literal word `football`, even when a custom query override omits it.
 - Query candidates are represented by `Trend` records for compatibility with the runner, but they are discovery topics rather than channel strategy decisions.
 - Query discovery prefers the least-used query+language bucket, so each run stays thematically and linguistically coherent while rotating across buckets over time.

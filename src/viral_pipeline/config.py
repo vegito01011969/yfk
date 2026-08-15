@@ -35,13 +35,13 @@ FOOTBALL_ACTIVITY_SEED_QUERIES = (
 )
 
 FOOTBALL_COMPILATION_QUERIES = (
-    "football goals shorts,football skills shorts,"
-    "football saves shorts,football fails shorts,"
-    "football celebrations shorts,football last minute goals shorts,"
-    "football penalty saves shorts,football free kick goals shorts,"
-    "football goalkeeper saves shorts,football nutmeg skills shorts,"
-    "football red card moments shorts,football comeback goals shorts,"
-    "football referee moments shorts,football volley goals shorts"
+    "unreal football saves shorts,epic football penalties shorts,"
+    "unforgettable football moments shorts,insane football passes shorts,"
+    "best football goals shorts,impossible football free kicks shorts,"
+    "crazy football goalkeeper saves shorts,legendary football comebacks shorts,"
+    "football last minute goals shorts,football nutmeg skills shorts,"
+    "football volley goals shorts,football red card drama shorts,"
+    "football goal line clearances shorts,football skills that shocked everyone shorts"
 )
 
 FOOTBALL_EVENT_KEYWORDS = (
