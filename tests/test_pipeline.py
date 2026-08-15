@@ -32,6 +32,7 @@ from viral_pipeline.stages import (
     PreparePublishStage,
     RankEventsStage,
     UploadYouTubeStage,
+    _require_expected_upload_channel_for_domain,
     _clip_hash_distance,
     _validate_expected_upload_channel,
 )
@@ -596,6 +597,22 @@ def test_validate_expected_upload_channel_rejects_wrong_channel(tmp_path: Path) 
         raise AssertionError("Expected upload channel validation to fail")
 
     _validate_expected_upload_channel(FakeYouTubeService(["expected-channel"]), settings)
+
+
+def test_football_upload_requires_expected_channel_id(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.content_domain = "football"
+    settings.enable_youtube_upload = True
+
+    try:
+        _require_expected_upload_channel_for_domain(settings)
+    except ValueError as exc:
+        assert "YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID" in str(exc)
+    else:
+        raise AssertionError("Expected football upload channel guard to fail")
+
+    settings.youtube_upload_expected_channel_id = "football-channel"
+    _require_expected_upload_channel_for_domain(settings)
 
 
 def test_upload_youtube_stage_does_not_reupload_existing_result(tmp_path: Path) -> None:

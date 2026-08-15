@@ -142,3 +142,14 @@ Use separate upload credentials for the football channel:
 
 - `FOOTBALL_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON`
 - `FOOTBALL_YOUTUBE_OAUTH_TOKEN_JSON`
+- `FOOTBALL_YOUTUBE_CHANNEL_ID`
+
+For local football-channel auth, use a separate token path and expected channel guard:
+
+```bash
+export YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID="UC..."
+export YOUTUBE_OAUTH_TOKEN_PATH="data/football_youtube_oauth_token.json"
+viral-pipeline auth-youtube-upload
+```
+
+Do not reuse `data/youtube_oauth_token.json` from another channel. In `CONTENT_DOMAIN=football`, uploads fail unless `YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID` is configured and matches the authenticated channel.
