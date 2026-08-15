@@ -13,6 +13,7 @@ from viral_pipeline.config import Settings
 from viral_pipeline.domain import StageName
 from viral_pipeline.logging import configure_logging
 from viral_pipeline.runner import PipelineRunner
+from viral_pipeline.stages import authenticate_and_validate_youtube_upload
 from viral_pipeline.storage import PipelineStore
 
 app = typer.Typer(help="Automated viral trend compilation pipeline.")
@@ -103,6 +104,14 @@ def paths() -> None:
         "workdir": str(Path(settings.pipeline_workdir).resolve()),
     }
     console.print(json.dumps(payload, indent=2))
+
+
+@app.command("auth-youtube-upload")
+def auth_youtube_upload() -> None:
+    """Create/refresh the YouTube upload OAuth token and validate the channel."""
+    settings = _settings()
+    result = authenticate_and_validate_youtube_upload(settings)
+    console.print_json(json.dumps(result, default=str))
 
 
 @app.command()

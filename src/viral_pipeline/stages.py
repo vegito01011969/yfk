@@ -34,6 +34,8 @@ from viral_pipeline.source_history import SourceHistory
 LOGGER = logging.getLogger(__name__)
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
+YOUTUBE_UPLOAD_SCOPES = [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READONLY_SCOPE]
 YOUTUBE_BOT_WALL_MARKERS = (
     "sign in to confirm you",
     "not a bot",
@@ -1189,8 +1191,12 @@ class PreparePublishStage(PipelineStage):
         context.publish_package = package
         if context.selected_trends:
             language = context.selected_trends[0].metadata.get("source_language")
+            query = str(
+                context.selected_trends[0].metadata.get("raw_query")
+                or context.selected_trends[0].title
+            )
             SourceHistory(self.settings.source_history_path).mark_query_used(
-                context.selected_trends[0].title,
+                query,
                 context.run_id,
                 str(language) if language else None,
             )
@@ -1239,6 +1245,7 @@ class UploadYouTubeStage(PipelineStage):
             )
             return context
 
+        _require_expected_upload_channel_for_domain(self.settings)
         if context.publish_package is None:
             raise ValueError("Cannot upload before publish package is prepared")
         render_path = Path(context.publish_package.metadata.get("render_path") or "")
@@ -1246,6 +1253,7 @@ class UploadYouTubeStage(PipelineStage):
             raise FileNotFoundError(f"Upload render path not found: {render_path}")
 
         youtube = _authenticated_youtube_service(self.settings)
+        _validate_expected_upload_channel(youtube, self.settings)
         body = {
             "snippet": {
                 "title": context.publish_package.title,
@@ -1289,6 +1297,47 @@ class UploadYouTubeStage(PipelineStage):
         return context
 
 
+def _require_expected_upload_channel_for_domain(settings: Settings) -> None:
+    if settings.content_domain == "football" and not settings.youtube_upload_expected_channel_id:
+        raise ValueError(
+            "YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID is required for football uploads. "
+            "Set it to the football channel ID before enabling upload."
+        )
+
+
+def authenticate_and_validate_youtube_upload(settings: Settings) -> dict[str, Any]:
+    _require_expected_upload_channel_for_domain(settings)
+    youtube = _authenticated_youtube_service(settings)
+    return _validate_expected_upload_channel(youtube, settings)
+
+
+def _validate_expected_upload_channel(youtube: Any, settings: Settings) -> dict[str, Any]:
+    expected_channel_id = settings.youtube_upload_expected_channel_id
+    if not expected_channel_id:
+        return {"validated": False, "reason": "No expected channel configured"}
+    response = (
+        youtube.channels()
+        .list(part="id,snippet", mine=True, maxResults=50)
+        .execute()
+    )
+    channels = response.get("items") or []
+    actual_ids = [str(channel.get("id")) for channel in channels if channel.get("id")]
+    if expected_channel_id in actual_ids:
+        return {
+            "validated": True,
+            "expected_channel_id": expected_channel_id,
+            "authenticated_channels": channels,
+        }
+    titles = [
+        str(channel.get("snippet", {}).get("title") or channel.get("id"))
+        for channel in channels
+    ]
+    raise RuntimeError(
+        "Authenticated YouTube upload token does not match expected channel "
+        f"{expected_channel_id}. Available authenticated channels: {titles or actual_ids}"
+    )
+
+
 def _authenticated_youtube_service(settings: Settings) -> Any:
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
@@ -1306,7 +1355,7 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
     if token_path.exists():
         credentials = Credentials.from_authorized_user_file(
             str(token_path),
-            scopes=[YOUTUBE_UPLOAD_SCOPE],
+            scopes=YOUTUBE_UPLOAD_SCOPES,
         )
     if credentials and credentials.expired and credentials.refresh_token:
         credentials.refresh(Request())
@@ -1318,7 +1367,7 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
             )
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_secret_path),
-            scopes=[YOUTUBE_UPLOAD_SCOPE],
+            scopes=YOUTUBE_UPLOAD_SCOPES,
         )
         credentials = flow.run_local_server(port=0)
     token_path.parent.mkdir(parents=True, exist_ok=True)

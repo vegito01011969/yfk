@@ -17,7 +17,9 @@ The pipeline is organized around independently replaceable stages. Each stage re
 
 Discovery:
 
-- The default `kids_funny` mode uses configurable short-video searches such as funny toddler fails, kids pranks, baby reactions, toddler bloopers, sibling moments, and kid mispronunciations.
+- `kids_funny` mode uses configurable short-video searches such as funny toddler fails, kids pranks, baby reactions, toddler bloopers, sibling moments, and kid mispronunciations.
+- `football` mode uses configurable short-video searches such as football goals, football skills, football saves, last-minute football goals, football fails, football celebrations, football comebacks, football referee moments, and football penalty saves.
+- Football-mode search query generation defensively includes the literal word `football`, even when a custom query override omits it.
 - Query candidates are represented by `Trend` records for compatibility with the runner, but they are discovery topics rather than channel strategy decisions.
 - Query discovery prefers the least-used query+language bucket, so each run stays thematically and linguistically coherent while rotating across buckets over time.
 - Add additional source adapters behind `TrendProvider` when useful.
@@ -27,6 +29,7 @@ YouTube collection:
 
 - Expand `YouTubeDataProvider` with `videos.list` statistics and content details.
 - In `kids_funny` mode, search results are scored for real kid/toddler presence, an obvious funny payoff, query-bucket fit, and popularity; cartoons, nursery rhymes, games, trailers, and songs are demoted.
+- In `football` mode, search results are scored for real football/soccer terms, an obvious moment/payoff, query-bucket fit, and popularity; gameplay, transfer news, podcasts, trailers, cartoons, and songs are demoted.
 - Add quota-aware pagination and backoff.
 - In `SOURCE_VIDEO_MODE=shorts`, search requests ask YouTube for short videos and the collected details are filtered by `MAX_SOURCE_VIDEO_SECONDS`.
 - Search requests pass `relevanceLanguage` and local filters keep only videos matching the selected run language when metadata or title signals are strong enough.
@@ -64,6 +67,7 @@ Publishing:
 - `generate_script` uses a Groq/OpenAI-compatible provider when `GROQCLOUD_API_KEY`, `GROQ_API_KEY`, or `OPENAI_API_KEY` is configured. It asks the model for JSON-only YouTube packaging metadata: title, description, tags, hashtags, and summary.
 - `prepare_publish` consumes that structured metadata when present and falls back to deterministic local metadata when the LLM is unavailable or returns invalid JSON.
 - `upload_youtube` uses OAuth and `videos.insert` when `ENABLE_YOUTUBE_UPLOAD=true`. The upload result is stored under the run's `upload/` directory.
+- The kids and football GitHub Actions workflows use separate OAuth token/client secrets, source-history files, cache keys, and concurrency groups. Football uploads additionally require `YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID` to match the authenticated channel before upload.
 - Add YouTube upload only after title/description policy checks, consent checks, and rights clearance are formalized.
 
 ## Resume Model

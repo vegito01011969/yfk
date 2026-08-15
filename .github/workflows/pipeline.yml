@@ -19,6 +19,11 @@ jobs:
 
     env:
       CI: "true"
+      CONTENT_DOMAIN: kids_funny
+      CONTENT_LABEL: Funny Kid Clips
+      SOURCE_LANGUAGE_MODE: cycle
+      SOURCE_LANGUAGES: en,hi
+      SOURCE_HISTORY_PATH: data/source_video_history.json
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
       MAX_DOWNLOAD_VIDEOS: "3"

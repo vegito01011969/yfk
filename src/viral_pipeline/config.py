@@ -2,8 +2,57 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+KIDS_FUNNY_ACTIVITY_SEED_QUERIES = (
+    "viral challenge,tiktok challenge,youtube shorts challenge,"
+    "dance challenge,people trying trend,challenge compilation,"
+    "viral trend everyone is doing,friends challenge,couples challenge"
+)
+
+KIDS_FUNNY_COMPILATION_QUERIES = (
+    "funny toddler fails shorts,kids funny fails shorts,"
+    "funny toddler pranks shorts,kids pranks shorts,"
+    "funny baby reactions shorts,funny toddler reactions shorts,"
+    "kids bloopers shorts,toddler bloopers shorts,"
+    "funny sibling moments shorts,kids laughing shorts,"
+    "funny kids mispronounce words shorts,cute funny toddler shorts,"
+    "babies and kids funny shorts,kids try not to laugh shorts"
+)
+
+KIDS_FUNNY_EVENT_KEYWORDS = (
+    "laugh,laughing,funny,cute,toddler,baby,kid,kids,child,children,"
+    "reaction,reacts,fail,fails,blooper,bloopers,prank,pranks,silly,"
+    "surprise,crying,giggling,playing,family,sibling,brother,sister,"
+    "mispronounce,mispronounces"
+)
+
+FOOTBALL_ACTIVITY_SEED_QUERIES = (
+    "viral football moments,football challenge,football shorts challenge,"
+    "football skills challenge,football compilation,"
+    "viral football trend,football fans challenge,football trick shots"
+)
+
+FOOTBALL_COMPILATION_QUERIES = (
+    "football goals shorts,football skills shorts,"
+    "football saves shorts,football fails shorts,"
+    "football celebrations shorts,football last minute goals shorts,"
+    "football penalty saves shorts,football free kick goals shorts,"
+    "football goalkeeper saves shorts,football nutmeg skills shorts,"
+    "football red card moments shorts,football comeback goals shorts,"
+    "football referee moments shorts,football volley goals shorts"
+)
+
+FOOTBALL_EVENT_KEYWORDS = (
+    "football,soccer,goal,goals,skill,skills,save,saves,goalkeeper,"
+    "keeper,penalty,free kick,freekick,header,volley,dribble,dribbling,"
+    "nutmeg,tackle,red card,yellow card,referee,var,celebration,"
+    "comeback,last minute,stoppage time,injury time,match,league,cup,"
+    "final,club,crowd,stadium,fans,fails,funny,crazy,unbelievable,"
+    "incredible,impossible"
+)
 
 
 class Settings(BaseSettings):
@@ -17,9 +66,9 @@ class Settings(BaseSettings):
     pipeline_workdir: Path = Field(default=Path("workdir"))
     source_history_path: Path = Field(default=Path("data/source_video_history.json"))
     content_domain: str = "kids_funny"
-    content_label: str = "Funny Kid Clips"
+    content_label: str = ""
     source_language_mode: str = "cycle"
-    source_languages: str = "en,hi"
+    source_languages: str = ""
     max_trends: int = 5
     selected_trend_count: int = 1
     max_videos_per_trend: int = 20
@@ -44,6 +93,7 @@ class Settings(BaseSettings):
     youtube_upload_privacy_status: str = "public"
     youtube_upload_notify_subscribers: bool = False
     youtube_upload_category_id: str = "22"
+    youtube_upload_expected_channel_id: str | None = None
     youtube_video_made_for_kids: bool = False
     youtube_video_self_declared_made_for_kids: bool = False
     youtube_region_code: str = "US"
@@ -53,26 +103,9 @@ class Settings(BaseSettings):
     youtube_trend_min_topic_videos: int = 3
     youtube_trend_min_compilation_videos: int = 2
     youtube_trend_lookback_hours: int = 168
-    youtube_activity_seed_queries: str = (
-        "viral challenge,tiktok challenge,youtube shorts challenge,"
-        "dance challenge,people trying trend,challenge compilation,"
-        "viral trend everyone is doing,friends challenge,couples challenge"
-    )
-    compilation_queries: str = (
-        "funny toddler fails shorts,kids funny fails shorts,"
-        "funny toddler pranks shorts,kids pranks shorts,"
-        "funny baby reactions shorts,funny toddler reactions shorts,"
-        "kids bloopers shorts,toddler bloopers shorts,"
-        "funny sibling moments shorts,kids laughing shorts,"
-        "funny kids mispronounce words shorts,cute funny toddler shorts,"
-        "babies and kids funny shorts,kids try not to laugh shorts"
-    )
-    event_keywords: str = (
-        "laugh,laughing,funny,cute,toddler,baby,kid,kids,child,children,"
-        "reaction,reacts,fail,fails,blooper,bloopers,prank,pranks,silly,"
-        "surprise,crying,giggling,playing,family,sibling,brother,sister,"
-        "mispronounce,mispronounces"
-    )
+    youtube_activity_seed_queries: str = ""
+    compilation_queries: str = ""
+    event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
     openai_voice: str = "alloy"
@@ -106,6 +139,32 @@ class Settings(BaseSettings):
     render_outro_seconds: float = 2.5
     enable_voiceover: bool = False
     local_tts_voice: str = "Samantha"
+
+    @model_validator(mode="after")
+    def apply_domain_defaults(self) -> "Settings":
+        if self.content_domain == "football":
+            if not self.content_label:
+                self.content_label = "Football Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = FOOTBALL_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = FOOTBALL_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = FOOTBALL_EVENT_KEYWORDS
+        elif self.content_domain == "kids_funny":
+            if not self.content_label:
+                self.content_label = "Funny Kid Clips"
+            if not self.source_languages:
+                self.source_languages = "en,hi"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = KIDS_FUNNY_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = KIDS_FUNNY_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = KIDS_FUNNY_EVENT_KEYWORDS
+        return self
 
     @property
     def runs_dir(self) -> Path:
