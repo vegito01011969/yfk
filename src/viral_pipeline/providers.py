@@ -6,6 +6,7 @@ import logging
 import re
 import subprocess
 import sys
+import unicodedata
 import zipfile
 from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
@@ -289,26 +290,37 @@ FOOTBALL_MOMENT_TERMS = {
 }
 
 FOOTBALL_EXCLUDED_TERMS = {
+    "asmr",
     "career",
     "cartoon",
     "eafc",
+    "edit",
+    "edits",
+    "efootball",
     "fc24",
     "fc25",
     "fifa",
     "game",
     "gameplay",
+    "gaming",
     "highlights",
+    "history",
     "interview",
+    "ishowspeed",
     "lyrics",
     "minecraft",
     "news",
     "pack",
     "packs",
     "podcast",
+    "reaction",
     "roblox",
     "rumor",
     "rumors",
     "song",
+    "talk",
+    "talks",
+    "total",
     "transfer",
     "transfers",
     "trailer",
@@ -547,19 +559,27 @@ def _shorts_search_queries(
         queries.append(_append_language_to_query("funny kids shorts", language))
     if settings and settings.content_domain == "football":
         lowered = query.lower()
+        alternates: list[str]
         if "save" in lowered or "goalkeeper" in lowered or "keeper" in lowered:
             fallback = "best football saves shorts"
+            alternates = ["football goalkeeper saves shorts", "football penalty saves shorts"]
         elif "skill" in lowered or "dribble" in lowered or "nutmeg" in lowered:
             fallback = "incredible football skills shorts"
+            alternates = ["football dribbling skills shorts", "football nutmeg skills shorts"]
         elif "fail" in lowered or "funny" in lowered:
             fallback = "funny football fails shorts"
+            alternates = ["football fails shorts", "football funny moments shorts"]
         elif "celebration" in lowered:
             fallback = "football celebrations shorts"
+            alternates = ["football goal celebrations shorts"]
         elif "last minute" in lowered or "comeback" in lowered:
             fallback = "last minute football goals shorts"
+            alternates = ["football comeback goals shorts", "football stoppage time goals shorts"]
         else:
-            fallback = "crazy football moments shorts"
+            fallback = "football goals shorts"
+            alternates = ["best football goals shorts", "unbelievable football goals shorts"]
         queries.append(_append_language_to_query(fallback, language))
+        queries.extend(_append_language_to_query(alternate, language) for alternate in alternates)
         queries.append(_append_language_to_query("viral football moments shorts", language))
 
     deduped: list[str] = []
@@ -571,6 +591,20 @@ def _shorts_search_queries(
 
 def _contains_devanagari(text: str) -> bool:
     return any("\u0900" <= char <= "\u097f" for char in text)
+
+
+def _contains_non_latin_script(text: str) -> bool:
+    for char in text:
+        if not char.isalpha():
+            continue
+        try:
+            name = unicodedata.name(char)
+        except ValueError:
+            continue
+        if name.startswith("LATIN"):
+            continue
+        return True
+    return False
 
 
 def _declared_language(video: YouTubeVideo) -> str | None:
@@ -596,7 +630,11 @@ def _video_matches_language(video: YouTubeVideo, language: str | None) -> bool:
         return has_devanagari or bool(tokens & HINDI_ROMANIZED_HINTS)
     if language == "en":
         tokens = set(re.findall(r"[a-z]+", text))
-        return not has_devanagari and not bool(tokens & HINDI_ROMANIZED_HINTS)
+        return (
+            not has_devanagari
+            and not _contains_non_latin_script(text)
+            and not bool(tokens & HINDI_ROMANIZED_HINTS)
+        )
     return True
 
 
@@ -658,6 +696,9 @@ def _football_relevance_score(video: YouTubeVideo, query: str) -> float:
     moment_matches = tokens & FOOTBALL_MOMENT_TERMS
     query_matches = comparable_tokens & query_tokens
     excluded_matches = tokens & FOOTBALL_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & FOOTBALL_CORE_TERMS
+    title_moment_matches = title_tokens & FOOTBALL_MOMENT_TERMS
 
     score = 0.0
     if core_matches:
@@ -674,11 +715,17 @@ def _football_relevance_score(video: YouTubeVideo, query: str) -> float:
         score += 0.05
 
     if excluded_matches:
-        score -= min(0.6, 0.3 + len(excluded_matches) * 0.06)
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
     if not core_matches:
         score -= 0.3
     if not moment_matches:
         score -= 0.12
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.32
+    if not title_moment_matches:
+        score -= 0.08
 
     return round(max(0.0, min(1.0, score)), 4)
 
@@ -696,7 +743,9 @@ def _domain_relevance_score(
 
 
 def _domain_relevance_threshold(settings: Settings | None) -> float | None:
-    if settings and settings.content_domain in {"kids_funny", "football"}:
+    if settings and settings.content_domain == "football":
+        return 0.55
+    if settings and settings.content_domain == "kids_funny":
         return 0.45
     return None
 

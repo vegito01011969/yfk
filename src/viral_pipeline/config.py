@@ -59,13 +59,13 @@ class Settings(BaseSettings):
         "viral football trend,football fans challenge,football trick shots"
     )
     compilation_queries: str = (
-        "crazy football moments shorts,unbelievable football goals shorts,"
-        "incredible football skills shorts,best football saves shorts,"
-        "last minute football goals shorts,football fails shorts,"
-        "funny football moments shorts,football celebrations shorts,"
-        "impossible football goals shorts,football comeback moments shorts,"
-        "football red card moments shorts,football penalty saves shorts,"
-        "football referee moments shorts,football goalkeeper moments shorts"
+        "football goals shorts,football skills shorts,"
+        "football saves shorts,football fails shorts,"
+        "football celebrations shorts,football last minute goals shorts,"
+        "football penalty saves shorts,football free kick goals shorts,"
+        "football goalkeeper saves shorts,football nutmeg skills shorts,"
+        "football red card moments shorts,football comeback goals shorts,"
+        "football referee moments shorts,football volley goals shorts"
     )
     event_keywords: str = (
         "football,soccer,goal,goals,skill,skills,save,saves,goalkeeper,"

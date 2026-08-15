@@ -198,6 +198,9 @@ class FakeFootballQualityClient:
             {"id": {"videoId": "gameplay"}},
             {"id": {"videoId": "goal"}},
             {"id": {"videoId": "transfer-news"}},
+            {"id": {"videoId": "arabic-title"}},
+            {"id": {"videoId": "football-talk"}},
+            {"id": {"videoId": "asmr-title"}},
             {"id": {"videoId": "save"}},
         ][:max_results]
 
@@ -221,6 +224,27 @@ class FakeFootballQualityClient:
                 "title": "Football transfer news today #shorts",
                 "description": "Latest transfer rumors and podcast reaction",
                 "tags": ["football", "transfer", "news", "podcast"],
+                "viewCount": "2000000",
+                "likeCount": "100000",
+            },
+            "arabic-title": {
+                "title": "جنون خطة ارسنال 🥶🔥",
+                "description": "Football moments and Arsenal goals",
+                "tags": ["football", "goal", "soccer"],
+                "viewCount": "1200000",
+                "likeCount": "80000",
+            },
+            "football-talk": {
+                "title": "IShowSpeed football talk gets wild #shorts",
+                "description": "Reaction stream talking about football",
+                "tags": ["football", "talk", "reaction", "ishowspeed"],
+                "viewCount": "1500000",
+                "likeCount": "100000",
+            },
+            "asmr-title": {
+                "title": "#asmr",
+                "description": "Football goal sounds and viral football moments",
+                "tags": ["asmr", "football", "goal", "soccer"],
                 "viewCount": "2000000",
                 "likeCount": "100000",
             },
@@ -489,7 +513,7 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
             source="test",
             metadata={"source_language": "en"},
         ),
-        limit=3,
+        limit=6,
     )
 
     assert [video.id for video in videos] == ["goal", "save"]
