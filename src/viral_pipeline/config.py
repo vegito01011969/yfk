@@ -62,6 +62,38 @@ FOOTBALL_EVENT_KEYWORDS = (
     "incredible,impossible"
 )
 
+CRICKET_ACTIVITY_SEED_QUERIES = (
+    "viral cricket moments,cricket shorts,cricket challenge,"
+    "cricket compilation,viral cricket trend,cricket trick shots,"
+    "cricket catches,cricket wickets"
+)
+
+CRICKET_COMPILATION_QUERIES = (
+    "unreal cricket catches shorts,epic cricket sixes shorts,"
+    "unforgettable cricket moments shorts,insane cricket bowling shorts,"
+    "best cricket wickets shorts,impossible cricket run outs shorts"
+)
+
+CRICKET_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
+)
+
+CRICKET_QUERY_TYPES = (
+    "cricket catches,cricket sixes,cricket wickets,cricket bowling,"
+    "cricket batting,cricket run outs,cricket fielding,cricket yorkers,"
+    "cricket bouncers,cricket stumpings,cricket finishes,cricket moments,"
+    "cricket celebrations,cricket last over finishes"
+)
+
+CRICKET_EVENT_KEYWORDS = (
+    "cricket,batsman,batter,batting,bowler,bowling,wicket,wickets,"
+    "six,sixes,four,boundary,catch,catches,fielding,run out,runout,"
+    "stumping,yorker,bouncer,googly,spin,fast bowling,innings,over,"
+    "last over,super over,finish,finishes,celebration,stadium,crowd,"
+    "fans,crazy,unbelievable,incredible,impossible"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -115,6 +147,8 @@ class Settings(BaseSettings):
     compilation_queries: str = ""
     football_query_adjectives: str = FOOTBALL_QUERY_ADJECTIVES
     football_query_types: str = FOOTBALL_QUERY_TYPES
+    cricket_query_adjectives: str = CRICKET_QUERY_ADJECTIVES
+    cricket_query_types: str = CRICKET_QUERY_TYPES
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -163,6 +197,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = FOOTBALL_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = FOOTBALL_EVENT_KEYWORDS
+        elif self.content_domain == "cricket":
+            if not self.content_label:
+                self.content_label = "Cricket Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = CRICKET_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = CRICKET_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = CRICKET_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"

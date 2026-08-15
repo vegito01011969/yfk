@@ -396,6 +396,144 @@ FOOTBALL_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+CRICKET_CORE_TERMS = {
+    "ball",
+    "batter",
+    "batting",
+    "batsman",
+    "boundary",
+    "bowler",
+    "bowling",
+    "bouncer",
+    "catch",
+    "catches",
+    "cricket",
+    "fielder",
+    "fielding",
+    "four",
+    "googly",
+    "innings",
+    "match",
+    "over",
+    "run",
+    "runout",
+    "runs",
+    "six",
+    "sixes",
+    "spin",
+    "stadium",
+    "stump",
+    "stumping",
+    "wicket",
+    "wickets",
+    "yorker",
+}
+
+CRICKET_MOMENT_TERMS = {
+    "amazing",
+    "best",
+    "celebration",
+    "crazy",
+    "dramatic",
+    "epic",
+    "finish",
+    "finishes",
+    "impossible",
+    "incredible",
+    "insane",
+    "last",
+    "legendary",
+    "moment",
+    "moments",
+    "over",
+    "shocking",
+    "super",
+    "unbelievable",
+    "unforgettable",
+    "unreal",
+    "unexpected",
+    "viral",
+}
+
+CRICKET_EXCLUDED_TERMS = {
+    "cartoon",
+    "dream11",
+    "edit",
+    "edits",
+    "fantasy",
+    "game",
+    "gameplay",
+    "gaming",
+    "highlights",
+    "interview",
+    "jersey",
+    "lyrics",
+    "minecraft",
+    "news",
+    "podcast",
+    "prediction",
+    "reaction",
+    "roblox",
+    "schedule",
+    "score",
+    "scores",
+    "song",
+    "talk",
+    "talks",
+    "trailer",
+}
+
+CRICKET_THEME_QUERIES: dict[str, list[str]] = {
+    "catches": [
+        "unreal cricket catches shorts",
+        "best cricket catches shorts",
+        "insane cricket fielding catches shorts",
+        "impossible cricket catch shorts",
+    ],
+    "sixes": [
+        "epic cricket sixes shorts",
+        "biggest cricket sixes shorts",
+        "unbelievable cricket sixes shorts",
+        "insane cricket batting sixes shorts",
+    ],
+    "wickets": [
+        "best cricket wickets shorts",
+        "crazy cricket wickets shorts",
+        "unbelievable cricket bowling wickets shorts",
+        "cricket stump flying wickets shorts",
+    ],
+    "bowling": [
+        "insane cricket bowling shorts",
+        "best cricket yorkers shorts",
+        "unplayable cricket bowling shorts",
+        "cricket bouncer wickets shorts",
+    ],
+    "run_outs": [
+        "impossible cricket run outs shorts",
+        "crazy cricket runout shorts",
+        "best cricket fielding run outs shorts",
+        "last second cricket run out shorts",
+    ],
+    "stumpings": [
+        "cricket stumpings shorts",
+        "best cricket wicketkeeper stumpings shorts",
+        "lightning cricket stumping shorts",
+        "unbelievable cricket stumpings shorts",
+    ],
+    "finishes": [
+        "cricket last over finishes shorts",
+        "dramatic cricket finishes shorts",
+        "cricket final over sixes shorts",
+        "unbelievable cricket match finish shorts",
+    ],
+    "moments": [
+        "unforgettable cricket moments shorts",
+        "shocking cricket moments shorts",
+        "cricket moments that shocked everyone shorts",
+        "crazy cricket moments shorts",
+    ],
+}
+
 
 class YouTubeApiError(RuntimeError):
     """Raised when a YouTube API call fails without exposing credentials."""
@@ -597,9 +735,17 @@ def _ensure_football_query(query: str) -> str:
     return f"football {query}"
 
 
+def _ensure_cricket_query(query: str) -> str:
+    if "cricket" in query.lower():
+        return query
+    return f"cricket {query}"
+
+
 def _domain_search_query(query: str, settings: Settings | None) -> str:
     if settings and settings.content_domain == "football":
         return _ensure_football_query(query)
+    if settings and settings.content_domain == "cricket":
+        return _ensure_cricket_query(query)
     return query
 
 
@@ -637,6 +783,30 @@ def _football_theme_search_queries(query: str) -> list[str]:
     return [query, *FOOTBALL_THEME_QUERIES[theme]]
 
 
+def _cricket_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("catch", "catches")):
+        return "catches"
+    if any(term in lowered for term in ("six", "sixes", "batting")):
+        return "sixes"
+    if any(term in lowered for term in ("wicket", "wickets", "stump flying")):
+        return "wickets"
+    if any(term in lowered for term in ("bowling", "bowler", "yorker", "bouncer")):
+        return "bowling"
+    if any(term in lowered for term in ("run out", "runout", "fielding")):
+        return "run_outs"
+    if any(term in lowered for term in ("stumping", "stumpings", "wicketkeeper")):
+        return "stumpings"
+    if any(term in lowered for term in ("finish", "finishes", "last over", "final over")):
+        return "finishes"
+    return "moments"
+
+
+def _cricket_theme_search_queries(query: str) -> list[str]:
+    theme = _cricket_theme(query)
+    return [query, *CRICKET_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -665,6 +835,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _football_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "cricket":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _cricket_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -815,6 +990,50 @@ def _football_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _cricket_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & CRICKET_CORE_TERMS
+    moment_matches = tokens & CRICKET_MOMENT_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & CRICKET_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & CRICKET_CORE_TERMS
+    title_moment_matches = title_tokens & CRICKET_MOMENT_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.38, 0.2 + len(core_matches) * 0.035)
+    if moment_matches:
+        score += min(0.34, 0.14 + len(moment_matches) * 0.04)
+    if query_matches:
+        score += min(0.18, len(query_matches) * 0.035)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.3
+    if not moment_matches:
+        score -= 0.12
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.32
+    if not title_moment_matches:
+        score -= 0.08
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -824,11 +1043,13 @@ def _domain_relevance_score(
         return _kids_funny_relevance_score(video, query)
     if settings and settings.content_domain == "football":
         return _football_relevance_score(video, query)
+    if settings and settings.content_domain == "cricket":
+        return _cricket_relevance_score(video, query)
     return 0.75
 
 
 def _domain_relevance_threshold(settings: Settings | None) -> float | None:
-    if settings and settings.content_domain == "football":
+    if settings and settings.content_domain in {"football", "cricket"}:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
         return 0.45
@@ -963,14 +1184,16 @@ class CompilationQueryProvider:
             for query in queries
             for language in languages
         ]
-        if self.settings.content_domain == "football":
+        if self.settings.content_domain in {"football", "cricket"}:
             random.shuffle(candidates)
         candidates = sorted(
             candidates,
             key=lambda item: (
                 int(self.history.query_stats(item[0], item[1]).get("run_count") or 0),
                 str(self.history.query_stats(item[0], item[1]).get("last_used_at") or ""),
-                queries.index(item[0]) if self.settings.content_domain != "football" else 0,
+                queries.index(item[0])
+                if self.settings.content_domain not in {"football", "cricket"}
+                else 0,
                 languages.index(item[1]),
             ),
         )
@@ -1013,9 +1236,23 @@ def _football_query_combinations(settings: Settings) -> list[str]:
     ]
 
 
+def _cricket_query_combinations(settings: Settings) -> list[str]:
+    adjectives = _settings_csv(settings.cricket_query_adjectives)
+    types = _settings_csv(settings.cricket_query_types)
+    return [
+        _ensure_shorts_query(_ensure_cricket_query(f"{adjective} {query_type}"))
+        for query_type in types
+        for adjective in adjectives
+    ]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "cricket":
+        generated = _cricket_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -1212,7 +1449,7 @@ class YouTubeDataProvider:
         )
         query_pool_size = (
             min(25, pool_size)
-            if self.settings and self.settings.content_domain == "football"
+            if self.settings and self.settings.content_domain in {"football", "cricket"}
             else pool_size
         )
         videos: list[YouTubeVideo] = []
@@ -1246,13 +1483,13 @@ class YouTubeDataProvider:
                     videos.append(video)
                 if (
                     self.settings
-                    and self.settings.content_domain != "football"
+                    and self.settings.content_domain not in {"football", "cricket"}
                     and len(videos) >= pool_size
                 ):
                     break
             if (
                 self.settings
-                and self.settings.content_domain != "football"
+                and self.settings.content_domain not in {"football", "cricket"}
                 and len(videos) >= pool_size
             ):
                 break
@@ -2071,7 +2308,7 @@ def build_providers(
     )
     trend_provider: TrendProvider = (
         CompilationQueryProvider(settings)
-        if settings.content_domain in {"kids_funny", "football", "compilation"}
+        if settings.content_domain in {"kids_funny", "football", "cricket", "compilation"}
         else YouTubeTrendProvider(settings, youtube_client)
         if youtube_client
         else LocalTrendProvider()

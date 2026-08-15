@@ -600,20 +600,22 @@ def test_validate_expected_upload_channel_rejects_wrong_channel(tmp_path: Path) 
     _validate_expected_upload_channel(FakeYouTubeService(["expected-channel"]), settings)
 
 
-def test_football_upload_requires_expected_channel_id(tmp_path: Path) -> None:
-    settings = make_settings(tmp_path)
-    settings.content_domain = "football"
-    settings.enable_youtube_upload = True
+def test_niche_uploads_require_expected_channel_id(tmp_path: Path) -> None:
+    for domain in ("football", "cricket"):
+        settings = make_settings(tmp_path)
+        settings.content_domain = domain
+        settings.enable_youtube_upload = True
 
-    try:
+        try:
+            _require_expected_upload_channel_for_domain(settings)
+        except ValueError as exc:
+            assert "YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID" in str(exc)
+            assert domain in str(exc)
+        else:
+            raise AssertionError(f"Expected {domain} upload channel guard to fail")
+
+        settings.youtube_upload_expected_channel_id = f"{domain}-channel"
         _require_expected_upload_channel_for_domain(settings)
-    except ValueError as exc:
-        assert "YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID" in str(exc)
-    else:
-        raise AssertionError("Expected football upload channel guard to fail")
-
-    settings.youtube_upload_expected_channel_id = "football-channel"
-    _require_expected_upload_channel_for_domain(settings)
 
 
 def test_youtube_oauth_scopes_only_add_read_scope_for_channel_guard(

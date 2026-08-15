@@ -278,6 +278,81 @@ class FakeFootballQualityClient:
         ]
 
 
+class FakeCricketQualityClient:
+    def __init__(self) -> None:
+        self.search_queries: list[str] = []
+
+    def search_videos(
+        self,
+        *,
+        query: str,
+        max_results: int,
+        order: str = "relevance",
+        published_after: object | None = None,
+        region_code: str | None = None,
+        video_duration: str | None = None,
+        relevance_language: str | None = None,
+    ) -> list[dict[str, Any]]:
+        self.search_queries.append(query)
+        return [
+            {"id": {"videoId": "gameplay"}},
+            {"id": {"videoId": "catch"}},
+            {"id": {"videoId": "fantasy-news"}},
+            {"id": {"videoId": "six"}},
+        ][:max_results]
+
+    def videos_by_id(self, video_ids: list[str]) -> list[dict[str, Any]]:
+        fixtures = {
+            "gameplay": {
+                "title": "Cricket 24 gameplay impossible catch #shorts",
+                "description": "Cricket game highlights",
+                "tags": ["cricket", "gameplay", "gaming"],
+                "viewCount": "3000000",
+                "likeCount": "250000",
+            },
+            "catch": {
+                "title": "Unreal cricket catch at the boundary #shorts",
+                "description": "The fielder takes an impossible catch in a packed stadium.",
+                "tags": ["cricket", "catch", "fielding", "unreal"],
+                "viewCount": "900000",
+                "likeCount": "90000",
+            },
+            "fantasy-news": {
+                "title": "Cricket fantasy team prediction today #shorts",
+                "description": "Dream11 prediction and score update",
+                "tags": ["cricket", "fantasy", "prediction", "news"],
+                "viewCount": "2000000",
+                "likeCount": "100000",
+            },
+            "six": {
+                "title": "Insane cricket six in the last over #shorts",
+                "description": "A batter hits a huge six to finish the match.",
+                "tags": ["cricket", "six", "batting", "last over", "finish"],
+                "viewCount": "800000",
+                "likeCount": "70000",
+            },
+        }
+        return [
+            {
+                "id": video_id,
+                "snippet": {
+                    "title": fixtures[video_id]["title"],
+                    "description": fixtures[video_id]["description"],
+                    "tags": fixtures[video_id]["tags"],
+                    "channelTitle": "Fixture Channel",
+                    "publishedAt": "2026-08-08T00:00:00Z",
+                },
+                "contentDetails": {"duration": "PT14S"},
+                "statistics": {
+                    "viewCount": fixtures[video_id]["viewCount"],
+                    "likeCount": fixtures[video_id]["likeCount"],
+                    "commentCount": "5",
+                },
+            }
+            for video_id in video_ids
+        ]
+
+
 def test_youtube_trend_provider_selects_compilation_backed_topic() -> None:
     client = FakeYouTubeClient(
         topic_hits=[
@@ -414,6 +489,7 @@ def test_compilation_query_provider_rotates_query_language_bucket(tmp_path) -> N
 def test_settings_apply_domain_specific_defaults() -> None:
     kids = Settings(_env_file=None, content_domain="kids_funny")
     football = Settings(_env_file=None, content_domain="football")
+    cricket = Settings(_env_file=None, content_domain="cricket")
 
     assert kids.content_label == "Funny Kid Clips"
     assert kids.source_languages == "en,hi"
@@ -423,6 +499,11 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert football.source_languages == "en"
     assert football.football_query_adjectives.split(",")[0] == "unreal"
     assert football.football_query_types.split(",")[0] == "football saves"
+
+    assert cricket.content_label == "Cricket Moments"
+    assert cricket.source_languages == "en"
+    assert cricket.cricket_query_adjectives.split(",")[0] == "unreal"
+    assert cricket.cricket_query_types.split(",")[0] == "cricket catches"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -498,6 +579,54 @@ def test_football_short_queries_stay_inside_selected_theme() -> None:
         "football goals shorts" == query.lower().replace(" english", "")
         for query in queries
     )
+
+
+def test_cricket_compilation_query_provider_generates_adjective_type_combinations(
+    tmp_path,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        content_domain="cricket",
+        source_history_path=tmp_path / "cricket_source_video_history.json",
+        source_languages="en",
+        compilation_queries=(
+            "unreal cricket catches shorts,epic cricket catches shorts,"
+            "unreal cricket wickets shorts,epic cricket wickets shorts"
+        ),
+        cricket_query_adjectives="unreal,epic",
+        cricket_query_types="cricket catches,cricket wickets",
+    )
+    SourceHistory(settings.source_history_path).mark_query_used(
+        "unreal cricket catches shorts",
+        "previous-run",
+        language="en",
+    )
+
+    trends = CompilationQueryProvider(settings).discover(limit=3)
+
+    titles = {trend.title for trend in trends}
+    assert "unreal cricket catches shorts" not in titles
+    assert titles <= {
+        "epic cricket catches shorts",
+        "unreal cricket wickets shorts",
+        "epic cricket wickets shorts",
+    }
+    assert len(titles) == 3
+    assert all(trend.title.endswith(" shorts") for trend in trends)
+
+
+def test_cricket_short_queries_stay_inside_selected_theme() -> None:
+    settings = Settings(_env_file=None, content_domain="cricket")
+
+    queries = _shorts_search_queries("unreal cricket catches shorts", "en", settings)
+
+    assert queries
+    assert all("cricket" in query.lower() for query in queries)
+    assert all(
+        any(term in query.lower() for term in ("catch", "catches", "fielding"))
+        for query in queries
+    )
+    assert not any("viral cricket moments" in query.lower() for query in queries)
 
 
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:
@@ -594,6 +723,39 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
     assert all("football" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral football moments" in query.lower()
+        for query in fake_client.search_queries
+    )
+
+
+def test_youtube_short_search_prefers_real_cricket_moments(tmp_path) -> None:
+    settings = Settings(
+        _env_file=None,
+        content_domain="cricket",
+        source_history_path=tmp_path / "cricket_source_video_history.json",
+        youtube_api_key="test-key",
+        max_source_video_seconds=30,
+        source_languages="en",
+    )
+    provider = YouTubeDataProvider(settings.youtube_api_key, settings)
+    fake_client = FakeCricketQualityClient()
+    provider.client = fake_client  # type: ignore[assignment]
+
+    videos = provider.search_compilations(
+        trend=Trend(
+            id="trend-1",
+            title="unreal catches shorts",
+            source="test",
+            metadata={"source_language": "en"},
+        ),
+        limit=6,
+    )
+
+    assert {video.id for video in videos} == {"catch", "six"}
+    assert all(video.metadata["search_relevance_score"] >= 0.55 for video in videos)
+    assert fake_client.search_queries
+    assert all("cricket" in query.lower() for query in fake_client.search_queries)
+    assert not any(
+        "viral cricket moments" in query.lower()
         for query in fake_client.search_queries
     )
 
