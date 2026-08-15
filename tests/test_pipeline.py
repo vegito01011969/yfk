@@ -35,6 +35,7 @@ from viral_pipeline.stages import (
     _clip_hash_distance,
     _require_expected_upload_channel_for_domain,
     _validate_expected_upload_channel,
+    _youtube_oauth_scopes,
 )
 from viral_pipeline.storage import PipelineStore
 
@@ -613,6 +614,23 @@ def test_football_upload_requires_expected_channel_id(tmp_path: Path) -> None:
 
     settings.youtube_upload_expected_channel_id = "football-channel"
     _require_expected_upload_channel_for_domain(settings)
+
+
+def test_youtube_oauth_scopes_only_add_read_scope_for_channel_guard(
+    tmp_path: Path,
+) -> None:
+    settings = make_settings(tmp_path)
+
+    assert _youtube_oauth_scopes(settings) == [
+        "https://www.googleapis.com/auth/youtube.upload"
+    ]
+
+    settings.youtube_upload_expected_channel_id = "expected-channel"
+
+    assert _youtube_oauth_scopes(settings) == [
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.readonly",
+    ]
 
 
 def test_upload_youtube_stage_does_not_reupload_existing_result(tmp_path: Path) -> None:

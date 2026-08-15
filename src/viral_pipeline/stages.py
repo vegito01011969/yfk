@@ -35,7 +35,6 @@ LOGGER = logging.getLogger(__name__)
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
-YOUTUBE_UPLOAD_SCOPES = [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READONLY_SCOPE]
 YOUTUBE_BOT_WALL_MARKERS = (
     "sign in to confirm you",
     "not a bot",
@@ -1351,11 +1350,12 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
         raise FileNotFoundError(f"OAuth client secrets file not found: {client_secret_path}")
 
     token_path = settings.youtube_oauth_token_path
+    scopes = _youtube_oauth_scopes(settings)
     credentials = None
     if token_path.exists():
         credentials = Credentials.from_authorized_user_file(
             str(token_path),
-            scopes=YOUTUBE_UPLOAD_SCOPES,
+            scopes=scopes,
         )
     if credentials and credentials.expired and credentials.refresh_token:
         credentials.refresh(Request())
@@ -1367,12 +1367,19 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
             )
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_secret_path),
-            scopes=YOUTUBE_UPLOAD_SCOPES,
+            scopes=scopes,
         )
         credentials = flow.run_local_server(port=0)
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(credentials.to_json(), encoding="utf-8")
     return build("youtube", "v3", credentials=credentials)
+
+
+def _youtube_oauth_scopes(settings: Settings) -> list[str]:
+    scopes = [YOUTUBE_UPLOAD_SCOPE]
+    if settings.youtube_upload_expected_channel_id:
+        scopes.append(YOUTUBE_READONLY_SCOPE)
+    return scopes
 
 
 def _upload_video(
