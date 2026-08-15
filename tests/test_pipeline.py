@@ -33,6 +33,7 @@ from viral_pipeline.stages import (
     RankEventsStage,
     UploadYouTubeStage,
     _clip_hash_distance,
+    _validate_expected_upload_channel,
 )
 from viral_pipeline.storage import PipelineStore
 
@@ -552,6 +553,49 @@ def test_upload_youtube_stage_skips_when_disabled(tmp_path: Path) -> None:
     assert context.youtube_upload is not None
     assert context.youtube_upload.status == "skipped"
     assert context.youtube_upload.path.exists()
+
+
+class FakeChannelsRequest:
+    def __init__(self, channel_ids: list[str]) -> None:
+        self.channel_ids = channel_ids
+
+    def execute(self) -> dict[str, object]:
+        return {
+            "items": [
+                {"id": channel_id, "snippet": {"title": f"Channel {channel_id}"}}
+                for channel_id in self.channel_ids
+            ]
+        }
+
+
+class FakeChannelsResource:
+    def __init__(self, channel_ids: list[str]) -> None:
+        self.channel_ids = channel_ids
+
+    def list(self, **kwargs: object) -> FakeChannelsRequest:
+        return FakeChannelsRequest(self.channel_ids)
+
+
+class FakeYouTubeService:
+    def __init__(self, channel_ids: list[str]) -> None:
+        self.channel_ids = channel_ids
+
+    def channels(self) -> FakeChannelsResource:
+        return FakeChannelsResource(self.channel_ids)
+
+
+def test_validate_expected_upload_channel_rejects_wrong_channel(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.youtube_upload_expected_channel_id = "expected-channel"
+
+    try:
+        _validate_expected_upload_channel(FakeYouTubeService(["other-channel"]), settings)
+    except RuntimeError as exc:
+        assert "expected-channel" in str(exc)
+    else:
+        raise AssertionError("Expected upload channel validation to fail")
+
+    _validate_expected_upload_channel(FakeYouTubeService(["expected-channel"]), settings)
 
 
 def test_upload_youtube_stage_does_not_reupload_existing_result(tmp_path: Path) -> None:

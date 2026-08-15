@@ -1250,6 +1250,7 @@ class UploadYouTubeStage(PipelineStage):
             raise FileNotFoundError(f"Upload render path not found: {render_path}")
 
         youtube = _authenticated_youtube_service(self.settings)
+        _validate_expected_upload_channel(youtube, self.settings)
         body = {
             "snippet": {
                 "title": context.publish_package.title,
@@ -1291,6 +1292,29 @@ class UploadYouTubeStage(PipelineStage):
             encoding="utf-8",
         )
         return context
+
+
+def _validate_expected_upload_channel(youtube: Any, settings: Settings) -> None:
+    expected_channel_id = settings.youtube_upload_expected_channel_id
+    if not expected_channel_id:
+        return
+    response = (
+        youtube.channels()
+        .list(part="id,snippet", mine=True, maxResults=50)
+        .execute()
+    )
+    channels = response.get("items") or []
+    actual_ids = [str(channel.get("id")) for channel in channels if channel.get("id")]
+    if expected_channel_id in actual_ids:
+        return
+    titles = [
+        str(channel.get("snippet", {}).get("title") or channel.get("id"))
+        for channel in channels
+    ]
+    raise RuntimeError(
+        "Authenticated YouTube upload token does not match expected channel "
+        f"{expected_channel_id}. Available authenticated channels: {titles or actual_ids}"
+    )
 
 
 def _authenticated_youtube_service(settings: Settings) -> Any:

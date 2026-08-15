@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     youtube_upload_privacy_status: str = "public"
     youtube_upload_notify_subscribers: bool = False
     youtube_upload_category_id: str = "22"
+    youtube_upload_expected_channel_id: str | None = None
     youtube_video_made_for_kids: bool = False
     youtube_video_self_declared_made_for_kids: bool = False
     youtube_region_code: str = "US"
