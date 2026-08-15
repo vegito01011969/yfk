@@ -34,6 +34,8 @@ from viral_pipeline.source_history import SourceHistory
 LOGGER = logging.getLogger(__name__)
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
+YOUTUBE_UPLOAD_SCOPES = [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READONLY_SCOPE]
 YOUTUBE_BOT_WALL_MARKERS = (
     "sign in to confirm you",
     "not a bot",
@@ -1353,7 +1355,7 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
     if token_path.exists():
         credentials = Credentials.from_authorized_user_file(
             str(token_path),
-            scopes=[YOUTUBE_UPLOAD_SCOPE],
+            scopes=YOUTUBE_UPLOAD_SCOPES,
         )
     if credentials and credentials.expired and credentials.refresh_token:
         credentials.refresh(Request())
@@ -1365,7 +1367,7 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
             )
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_secret_path),
-            scopes=[YOUTUBE_UPLOAD_SCOPE],
+            scopes=YOUTUBE_UPLOAD_SCOPES,
         )
         credentials = flow.run_local_server(port=0)
     token_path.parent.mkdir(parents=True, exist_ok=True)
