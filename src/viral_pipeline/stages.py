@@ -1189,8 +1189,12 @@ class PreparePublishStage(PipelineStage):
         context.publish_package = package
         if context.selected_trends:
             language = context.selected_trends[0].metadata.get("source_language")
+            query = str(
+                context.selected_trends[0].metadata.get("raw_query")
+                or context.selected_trends[0].title
+            )
             SourceHistory(self.settings.source_history_path).mark_query_used(
-                context.selected_trends[0].title,
+                query,
                 context.run_id,
                 str(language) if language else None,
             )

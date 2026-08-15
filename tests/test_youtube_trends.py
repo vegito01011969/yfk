@@ -179,6 +179,9 @@ class FakeKidsQualityClient:
 
 
 class FakeFootballQualityClient:
+    def __init__(self) -> None:
+        self.search_queries: list[str] = []
+
     def search_videos(
         self,
         *,
@@ -190,6 +193,7 @@ class FakeFootballQualityClient:
         video_duration: str | None = None,
         relevance_language: str | None = None,
     ) -> list[dict[str, Any]]:
+        self.search_queries.append(query)
         return [
             {"id": {"videoId": "gameplay"}},
             {"id": {"videoId": "goal"}},
@@ -346,6 +350,7 @@ def test_youtube_trend_provider_rejects_entities_without_activity_evidence() -> 
 def test_compilation_query_provider_prefers_unused_query_bucket(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
+        content_domain="kids_funny",
         source_history_path=tmp_path / "source_video_history.json",
         source_languages="en",
         compilation_queries="funny kids shorts,toddler reaction shorts,kids bloopers shorts",
@@ -364,6 +369,7 @@ def test_compilation_query_provider_prefers_unused_query_bucket(tmp_path) -> Non
 def test_compilation_query_provider_rotates_query_language_bucket(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
+        content_domain="kids_funny",
         source_history_path=tmp_path / "source_video_history.json",
         source_languages="en,hi",
         compilation_queries="funny kids shorts",
@@ -378,6 +384,24 @@ def test_compilation_query_provider_rotates_query_language_bucket(tmp_path) -> N
 
     assert trends[0].title == "funny kids shorts"
     assert trends[0].metadata["source_language"] == "hi"
+
+
+def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
+    settings = Settings(
+        _env_file=None,
+        content_domain="football",
+        source_history_path=tmp_path / "football_source_video_history.json",
+        source_languages="en",
+        compilation_queries="crazy goals shorts,penalty saves shorts",
+    )
+
+    trends = CompilationQueryProvider(settings).discover(limit=2)
+
+    assert [trend.title for trend in trends] == [
+        "football crazy goals shorts",
+        "football penalty saves shorts",
+    ]
+    assert trends[0].metadata["raw_query"] == "crazy goals shorts"
 
 
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:
@@ -455,12 +479,13 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
         source_languages="en",
     )
     provider = YouTubeDataProvider(settings.youtube_api_key, settings)
-    provider.client = FakeFootballQualityClient()  # type: ignore[assignment]
+    fake_client = FakeFootballQualityClient()
+    provider.client = fake_client  # type: ignore[assignment]
 
     videos = provider.search_compilations(
         trend=Trend(
             id="trend-1",
-            title="crazy football moments shorts",
+            title="crazy moments shorts",
             source="test",
             metadata={"source_language": "en"},
         ),
@@ -469,6 +494,8 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
 
     assert [video.id for video in videos] == ["goal", "save"]
     assert all(video.metadata["search_relevance_score"] >= 0.45 for video in videos)
+    assert fake_client.search_queries
+    assert all("football" in query.lower() for query in fake_client.search_queries)
 
 
 def test_youtube_trend_provider_filters_generic_media_terms() -> None:

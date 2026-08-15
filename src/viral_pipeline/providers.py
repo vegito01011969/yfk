@@ -509,11 +509,24 @@ def _append_language_to_query(query: str, language: str | None) -> str:
     return f"{query} {label}"
 
 
+def _ensure_football_query(query: str) -> str:
+    if "football" in query.lower():
+        return query
+    return f"football {query}"
+
+
+def _domain_search_query(query: str, settings: Settings | None) -> str:
+    if settings and settings.content_domain == "football":
+        return _ensure_football_query(query)
+    return query
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
     settings: Settings | None,
 ) -> list[str]:
+    query = _domain_search_query(query, settings)
     base_query = query if "short" in query.lower() else f"{query} shorts"
     queries = [_append_language_to_query(base_query, language)]
     if settings and settings.content_domain == "kids_funny":
@@ -831,16 +844,18 @@ class CompilationQueryProvider:
         )
         trends: list[Trend] = []
         for index, (query, language) in enumerate(candidates[:limit]):
+            title = _domain_search_query(query, self.settings)
             score = max(0.45, 1.0 - index * 0.06)
             trends.append(
                 Trend(
-                    title=query,
+                    title=title,
                     source="compilation_query",
                     velocity_score=score,
                     audience_fit_score=0.9,
                     metadata={
                         "domain": self.settings.content_domain,
                         "query_rank": index + 1,
+                        "raw_query": query,
                         "source_language": language,
                         "source_language_label": _language_label(language),
                         "query_run_count": int(

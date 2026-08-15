@@ -17,7 +17,8 @@ The pipeline is organized around independently replaceable stages. Each stage re
 
 Discovery:
 
-- The default `football` mode uses configurable short-video searches such as crazy football moments, unbelievable goals, skills, saves, last-minute goals, fails, celebrations, comebacks, referee moments, and penalty saves.
+- The default `football` mode uses configurable short-video searches such as crazy football moments, unbelievable football goals, football skills, football saves, last-minute football goals, football fails, football celebrations, football comebacks, football referee moments, and football penalty saves.
+- Football-mode search query generation defensively includes the literal word `football`, even when a custom query override omits it.
 - Query candidates are represented by `Trend` records for compatibility with the runner, but they are discovery topics rather than channel strategy decisions.
 - Query discovery prefers the least-used query+language bucket, so each run stays thematically and linguistically coherent while rotating across buckets over time.
 - Add additional source adapters behind `TrendProvider` when useful.

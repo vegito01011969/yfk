@@ -13,7 +13,7 @@ The code is structured as a production foundation rather than a one-off script. 
 - YouTube Data API search when `YOUTUBE_API_KEY` is configured.
 - Deterministic local fallback providers for development and CI.
 - Optional real adapters for YouTube Data API, `yt-dlp`, `ffmpeg`, Groq/OpenAI-compatible metadata generation, and OpenAI voice generation.
-- Searches football moment buckets such as crazy moments, unbelievable goals, skills, saves, fails, celebrations, comebacks, referee moments, and penalty saves.
+- Searches football moment buckets such as crazy football moments, unbelievable football goals, football skills, football saves, football fails, football celebrations, football comebacks, football referee moments, and football penalty saves.
 - Downloads top Shorts or very short videos before clip extraction.
 - Treats each short video as a candidate moment by default, then groups and ranks moments before final assembly.
 - Produces a clip-only compilation by default: no title card, no numbering overlays, and no narration.
@@ -67,7 +67,7 @@ Key environment variables:
 - `SOURCE_LANGUAGE_MODE`: language selection strategy. Default: `cycle`.
 - `SOURCE_LANGUAGES`: comma-separated source languages to rotate through. Default on this branch: `en`.
 - `SOURCE_HISTORY_PATH`: JSON source catalog used to avoid repeated YouTube source videos across runs. Default: `data/source_video_history.json`; the GitHub Actions workflow uses `data/football_source_video_history.json`.
-- `COMPILATION_QUERIES`: comma-separated searches such as `crazy football moments shorts`, `unbelievable football goals shorts`, and `best football saves shorts`.
+- `COMPILATION_QUERIES`: comma-separated searches such as `crazy football moments shorts`, `unbelievable football goals shorts`, and `best football saves shorts`. In `CONTENT_DOMAIN=football`, the pipeline defensively adds `football` to any configured search query that omits it.
 - `EVENT_KEYWORDS`: comma-separated moment terms used for grouping/ranking.
 - `SOURCE_VIDEO_MODE`: source-video strategy. Default: `shorts`.
 - `MAX_SOURCE_VIDEO_SECONDS`: maximum source duration kept in shorts mode. Default: `30`.

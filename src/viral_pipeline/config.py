@@ -54,9 +54,9 @@ class Settings(BaseSettings):
     youtube_trend_min_compilation_videos: int = 2
     youtube_trend_lookback_hours: int = 168
     youtube_activity_seed_queries: str = (
-        "viral challenge,tiktok challenge,youtube shorts challenge,"
-        "dance challenge,people trying trend,challenge compilation,"
-        "viral trend everyone is doing,friends challenge,couples challenge"
+        "viral football moments,football challenge,football shorts challenge,"
+        "football skills challenge,football compilation,"
+        "viral football trend,football fans challenge,football trick shots"
     )
     compilation_queries: str = (
         "crazy football moments shorts,unbelievable football goals shorts,"
