@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import random
 import shutil
 import subprocess
@@ -14,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 MAX_ATTEMPTS = 3
-MIN_SSIM_SAMPLE = 0.75
+MIN_SSIM_SAMPLE = 0.78
 
 
 @dataclass(frozen=True)
@@ -32,25 +34,35 @@ class VideoInfo:
 class TransformPlan:
     seed: int
     attempt: int
+    profile: str
     crop_left: int
     crop_top: int
     crop_width: int
     crop_height: int
-    scale_width: int
-    scale_height: int
+    output_width: int
+    output_height: int
+    working_width: int
+    working_height: int
+    rotate_degrees: float
     fps: float
     brightness: float
     contrast: float
     saturation: float
     gamma: float
+    hue_degrees: float
     denoise_luma: float
     denoise_chroma: float
     noise_strength: int
+    grain_mix_frames: int
     unsharp_amount: float
     speed: float
     audio_volume_db: float
     audio_highpass_hz: int
     audio_lowpass_hz: int
+    audio_compressor_threshold_db: float
+    audio_compressor_ratio: float
+    audio_eq_frequency_hz: int
+    audio_eq_gain_db: float
     crf: int
     preset: str
     video_bitrate: str | None
@@ -60,6 +72,81 @@ class TransformPlan:
     refs: int
     aq_strength: float
     video_track_timescale: int
+    movflags: str
+
+
+@dataclass(frozen=True)
+class TransformProfile:
+    name: str
+    crop_pct_range: tuple[float, float]
+    rotate_abs_max: float
+    fps_jitter_choices: tuple[float, ...]
+    speed_range: tuple[float, float]
+    brightness_range: tuple[float, float]
+    contrast_range: tuple[float, float]
+    saturation_range: tuple[float, float]
+    gamma_range: tuple[float, float]
+    hue_abs_max: float
+    denoise_luma_range: tuple[float, float]
+    denoise_chroma_range: tuple[float, float]
+    noise_strength_range: tuple[int, int]
+    unsharp_range: tuple[float, float]
+    crf_range: tuple[int, int]
+
+
+PROFILES = (
+    TransformProfile(
+        name="perceptual_close",
+        crop_pct_range=(0.004, 0.014),
+        rotate_abs_max=0.08,
+        fps_jitter_choices=(-0.12, -0.06, 0.0, 0.06, 0.12),
+        speed_range=(0.9985, 1.0015),
+        brightness_range=(-0.008, 0.008),
+        contrast_range=(0.99, 1.018),
+        saturation_range=(0.99, 1.025),
+        gamma_range=(0.992, 1.012),
+        hue_abs_max=0.6,
+        denoise_luma_range=(0.12, 0.42),
+        denoise_chroma_range=(0.12, 0.36),
+        noise_strength_range=(1, 2),
+        unsharp_range=(0.06, 0.18),
+        crf_range=(18, 22),
+    ),
+    TransformProfile(
+        name="balanced_stress",
+        crop_pct_range=(0.008, 0.024),
+        rotate_abs_max=0.18,
+        fps_jitter_choices=(-0.2, -0.1, 0.0, 0.1, 0.2),
+        speed_range=(0.9975, 1.0025),
+        brightness_range=(-0.012, 0.012),
+        contrast_range=(0.985, 1.028),
+        saturation_range=(0.985, 1.04),
+        gamma_range=(0.99, 1.016),
+        hue_abs_max=1.1,
+        denoise_luma_range=(0.18, 0.62),
+        denoise_chroma_range=(0.16, 0.52),
+        noise_strength_range=(1, 3),
+        unsharp_range=(0.08, 0.24),
+        crf_range=(19, 24),
+    ),
+    TransformProfile(
+        name="representation_heavy",
+        crop_pct_range=(0.012, 0.032),
+        rotate_abs_max=0.26,
+        fps_jitter_choices=(-0.3, -0.2, -0.1, 0.1, 0.2, 0.3),
+        speed_range=(0.9965, 1.0035),
+        brightness_range=(-0.016, 0.016),
+        contrast_range=(0.98, 1.035),
+        saturation_range=(0.98, 1.05),
+        gamma_range=(0.986, 1.02),
+        hue_abs_max=1.6,
+        denoise_luma_range=(0.25, 0.75),
+        denoise_chroma_range=(0.2, 0.6),
+        noise_strength_range=(2, 4),
+        unsharp_range=(0.1, 0.28),
+        crf_range=(20, 25),
+    ),
+)
 
 
 def run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -129,9 +216,22 @@ def even(value: int) -> int:
     return max(2, value - (value % 2))
 
 
+def hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
     rng = random.Random(seed + attempt * 7919)
-    crop_pct = rng.uniform(0.004, 0.018)
+    profile = rng.choices(
+        PROFILES,
+        weights=[0.25, 0.5, 0.25],
+        k=1,
+    )[0]
+    crop_pct = rng.uniform(*profile.crop_pct_range)
     crop_x_total = even(int(info.width * crop_pct))
     crop_y_total = even(int(info.height * crop_pct))
     crop_left = even(rng.randint(0, max(0, crop_x_total)))
@@ -139,33 +239,48 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
     crop_width = even(info.width - crop_x_total)
     crop_height = even(info.height - crop_y_total)
 
-    fps_jitter = rng.choice([-0.2, -0.1, 0, 0.1, 0.2])
+    fps_jitter = rng.choice(profile.fps_jitter_choices)
     target_fps = max(12.0, min(60.0, round(info.fps + fps_jitter, 3)))
-    speed = rng.uniform(0.9975, 1.0025)
+    speed = rng.uniform(*profile.speed_range)
+    rotate_degrees = rng.uniform(-profile.rotate_abs_max, profile.rotate_abs_max)
+    rotate_radians = abs(math.radians(rotate_degrees))
+    overscan = 1.0 + abs(math.sin(rotate_radians)) + rng.uniform(0.006, 0.018)
+    working_width = even(math.ceil(info.width * overscan))
+    working_height = even(math.ceil(info.height * overscan))
 
     return TransformPlan(
         seed=seed,
         attempt=attempt,
+        profile=profile.name,
         crop_left=crop_left,
         crop_top=crop_top,
         crop_width=crop_width,
         crop_height=crop_height,
-        scale_width=even(info.width),
-        scale_height=even(info.height),
+        output_width=even(info.width),
+        output_height=even(info.height),
+        working_width=working_width,
+        working_height=working_height,
+        rotate_degrees=rotate_degrees,
         fps=target_fps,
-        brightness=rng.uniform(-0.012, 0.012),
-        contrast=rng.uniform(0.985, 1.025),
-        saturation=rng.uniform(0.985, 1.035),
-        gamma=rng.uniform(0.99, 1.015),
-        denoise_luma=rng.uniform(0.15, 0.55),
-        denoise_chroma=rng.uniform(0.15, 0.45),
-        noise_strength=rng.randint(1, 3),
-        unsharp_amount=rng.uniform(0.08, 0.22),
+        brightness=rng.uniform(*profile.brightness_range),
+        contrast=rng.uniform(*profile.contrast_range),
+        saturation=rng.uniform(*profile.saturation_range),
+        gamma=rng.uniform(*profile.gamma_range),
+        hue_degrees=rng.uniform(-profile.hue_abs_max, profile.hue_abs_max),
+        denoise_luma=rng.uniform(*profile.denoise_luma_range),
+        denoise_chroma=rng.uniform(*profile.denoise_chroma_range),
+        noise_strength=rng.randint(*profile.noise_strength_range),
+        grain_mix_frames=rng.choice([1, 1, 2]),
+        unsharp_amount=rng.uniform(*profile.unsharp_range),
         speed=speed,
         audio_volume_db=rng.uniform(-0.7, 0.7),
         audio_highpass_hz=rng.randint(18, 35),
         audio_lowpass_hz=rng.randint(17500, 20500),
-        crf=rng.randint(18, 23),
+        audio_compressor_threshold_db=rng.uniform(-22.0, -16.0),
+        audio_compressor_ratio=rng.uniform(1.08, 1.28),
+        audio_eq_frequency_hz=rng.choice([180, 240, 320, 3600, 5200, 7200]),
+        audio_eq_gain_db=rng.uniform(-0.9, 0.9),
+        crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         video_bitrate=None,
         audio_bitrate=rng.choice(["128k", "160k", "192k"]),
@@ -174,29 +289,38 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
         refs=rng.randint(2, 5),
         aq_strength=rng.uniform(0.75, 1.15),
         video_track_timescale=rng.choice([24000, 30000, 60000, 90000]),
+        movflags=rng.choice(["+faststart", "+faststart+use_metadata_tags"]),
     )
 
 
 def video_filter(plan: TransformPlan) -> str:
-    return ",".join(
+    filters = [
+        f"crop={plan.crop_width}:{plan.crop_height}:{plan.crop_left}:{plan.crop_top}",
+        (
+            f"scale={plan.working_width}:{plan.working_height}:"
+            "flags=lanczos:force_original_aspect_ratio=decrease"
+        ),
+        (
+            f"pad={plan.working_width}:{plan.working_height}:"
+            "(ow-iw)/2:(oh-ih)/2:color=black"
+        ),
+        f"rotate={math.radians(plan.rotate_degrees):.8f}:fillcolor=black",
+        f"crop={plan.output_width}:{plan.output_height}:(iw-ow)/2:(ih-oh)/2",
+        (
+            f"eq=brightness={plan.brightness:.5f}:contrast={plan.contrast:.5f}:"
+            f"saturation={plan.saturation:.5f}:gamma={plan.gamma:.5f}"
+        ),
+        f"hue=h={plan.hue_degrees:.5f}",
+        (
+            f"hqdn3d={plan.denoise_luma:.3f}:{plan.denoise_chroma:.3f}:"
+            f"{plan.denoise_luma * 1.8:.3f}:{plan.denoise_chroma * 1.8:.3f}"
+        ),
+    ]
+    if plan.grain_mix_frames > 1:
+        weights = " ".join("1" for _ in range(plan.grain_mix_frames))
+        filters.append(f"tmix=frames={plan.grain_mix_frames}:weights='{weights}'")
+    filters.extend(
         [
-            f"crop={plan.crop_width}:{plan.crop_height}:{plan.crop_left}:{plan.crop_top}",
-            (
-                f"scale={plan.scale_width}:{plan.scale_height}:"
-                "flags=lanczos:force_original_aspect_ratio=decrease"
-            ),
-            (
-                f"pad={plan.scale_width}:{plan.scale_height}:"
-                "(ow-iw)/2:(oh-ih)/2:color=black"
-            ),
-            (
-                f"eq=brightness={plan.brightness:.5f}:contrast={plan.contrast:.5f}:"
-                f"saturation={plan.saturation:.5f}:gamma={plan.gamma:.5f}"
-            ),
-            (
-                f"hqdn3d={plan.denoise_luma:.3f}:{plan.denoise_chroma:.3f}:"
-                f"{plan.denoise_luma * 1.8:.3f}:{plan.denoise_chroma * 1.8:.3f}"
-            ),
             f"noise=alls={plan.noise_strength}:allf=t+u",
             f"unsharp=5:5:{plan.unsharp_amount:.4f}:3:3:0.0",
             f"setpts={1 / plan.speed:.8f}*PTS",
@@ -205,6 +329,7 @@ def video_filter(plan: TransformPlan) -> str:
             "setsar=1",
         ]
     )
+    return ",".join(filters)
 
 
 def audio_filter(plan: TransformPlan) -> str:
@@ -212,6 +337,16 @@ def audio_filter(plan: TransformPlan) -> str:
         [
             f"highpass=f={plan.audio_highpass_hz}",
             f"lowpass=f={plan.audio_lowpass_hz}",
+            (
+                "acompressor="
+                f"threshold={plan.audio_compressor_threshold_db:.3f}dB:"
+                f"ratio={plan.audio_compressor_ratio:.3f}:"
+                "attack=12:release=120:makeup=1"
+            ),
+            (
+                f"equalizer=f={plan.audio_eq_frequency_hz}:"
+                f"width_type=o:width=1.2:g={plan.audio_eq_gain_db:.3f}"
+            ),
             "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20",
             f"volume={plan.audio_volume_db:.3f}dB",
             f"atempo={plan.speed:.8f}",
@@ -286,7 +421,7 @@ def transform_once(
             "-avoid_negative_ts",
             "make_zero",
             "-movflags",
-            "+faststart",
+            plan.movflags,
             str(output_path),
         ]
     )
@@ -371,7 +506,34 @@ def validate(
         audio_ok = output_info.has_audio
     ssim = compare_ssim(input_path, output_path, tmpdir, input_info.fps)
     similarity_ok = ssim is None or ssim >= MIN_SSIM_SAMPLE
-    ok = duration_delta <= duration_limit and dimensions_ok and audio_ok and similarity_ok
+    file_hash_changed = hash_file(input_path) != hash_file(output_path)
+    codec_changed = (
+        output_info.video_codec != input_info.video_codec
+        or output_info.audio_codec != input_info.audio_codec
+    )
+    fps_delta = abs(output_info.fps - input_info.fps)
+    file_size_delta_ratio = abs(output_path.stat().st_size - input_path.stat().st_size) / max(
+        1,
+        input_path.stat().st_size,
+    )
+    technical_difference_score = sum(
+        [
+            file_hash_changed,
+            codec_changed,
+            fps_delta >= 0.05,
+            file_size_delta_ratio >= 0.01,
+            output_info.width == input_info.width and output_info.height == input_info.height,
+            duration_delta > 0.005,
+        ]
+    )
+    ok = (
+        duration_delta <= duration_limit
+        and dimensions_ok
+        and audio_ok
+        and similarity_ok
+        and file_hash_changed
+        and technical_difference_score >= 3
+    )
     return ok, {
         "input": asdict(input_info),
         "output": asdict(output_info),
@@ -382,6 +544,12 @@ def validate(
         "ssim_sample": ssim,
         "ssim_threshold": MIN_SSIM_SAMPLE,
         "similarity_ok": similarity_ok,
+        "file_hash_changed": file_hash_changed,
+        "codec_changed": codec_changed,
+        "fps_delta": round(fps_delta, 4),
+        "file_size_delta_ratio": round(file_size_delta_ratio, 4),
+        "technical_difference_score": technical_difference_score,
+        "technical_difference_score_threshold": 3,
     }
 
 

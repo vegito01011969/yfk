@@ -62,16 +62,18 @@ This report does not predict whether a specific provenance system will match the
 
 ## What It Does
 
-The tool automatically inspects the input and builds a randomized transform plan with mild, perceptually conservative changes:
+The tool automatically inspects the input and builds a randomized transform plan from one of several perceptual stress profiles:
 
 - small crop and resize back to the original dimensions
+- slight working-resolution overscan followed by micro-rotation and center crop
 - slight brightness, contrast, saturation, and gamma adjustment
-- mild denoise, tiny synthetic noise, and sharpening changes
+- tiny hue adjustment
+- mild denoise, temporal grain mixing, synthetic noise, and sharpening changes
 - small frame-rate and timing normalization
-- audio high/low-pass normalization, high-quality resampling, small volume adjustment, and synchronized tempo matching
+- audio high/low-pass normalization, subtle compression, slight EQ, high-quality resampling, small volume adjustment, and synchronized tempo matching
 - metadata/chapter stripping
 - H.264/AAC encoding with randomized sane encoder settings, GOP structure, reference frames, B-frames, and adaptive quantization
-- MP4 output with fast-start layout and varied video track timescale
+- MP4 output with fast-start layout, varied video track timescale, and randomized muxer flags
 
 It validates the output for:
 
@@ -80,8 +82,12 @@ It validates the output for:
 - expected audio presence
 - valid video dimensions
 - sampled SSIM perceptual similarity
+- changed file hash
+- minimum technical-difference score across timing, size, frame-rate, codec, and container characteristics
 
 If validation fails, it retries with a new transform plan. Intermediate files are cleaned automatically.
+
+The debug JSON records the selected stress profile, every randomized parameter, every validation attempt, sampled SSIM, duration drift, file-size delta, frame-rate delta, and the technical-difference score. Keep that file with test results if you need reproducibility.
 
 ## Suggested Blind Evaluation
 
