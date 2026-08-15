@@ -1097,6 +1097,11 @@ class YouTubeDataProvider:
             self.settings.youtube_search_pool_size if self.settings else 50,
             max(limit * 6, limit),
         )
+        query_pool_size = (
+            min(25, pool_size)
+            if self.settings and self.settings.content_domain == "football"
+            else pool_size
+        )
         videos: list[YouTubeVideo] = []
         seen_search_ids: set[str] = set()
         search_queries = _shorts_search_queries(trend.title, language, self.settings)
@@ -1104,7 +1109,7 @@ class YouTubeDataProvider:
             for attempt_published_after in (published_after, None):
                 search_items = self.client.search_videos(
                     query=search_query,
-                    max_results=pool_size,
+                    max_results=query_pool_size,
                     order="relevance",
                     published_after=attempt_published_after,
                     region_code=self.settings.youtube_region_code if self.settings else None,
@@ -1126,9 +1131,17 @@ class YouTubeDataProvider:
                         else None
                     )
                     videos.append(video)
-                if len(videos) >= pool_size:
+                if (
+                    self.settings
+                    and self.settings.content_domain != "football"
+                    and len(videos) >= pool_size
+                ):
                     break
-            if len(videos) >= pool_size:
+            if (
+                self.settings
+                and self.settings.content_domain != "football"
+                and len(videos) >= pool_size
+            ):
                 break
         max_seconds = self.settings.max_source_video_seconds if self.settings else 75
         short_videos = [
@@ -1365,6 +1378,16 @@ class ColabYtDlpVideoDownloadProvider:
             if path.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}
         ]
         if not candidates:
+            result_path = output_dir / "result.json"
+            if result_path.exists():
+                try:
+                    result = json.loads(result_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    result = {"raw": result_path.read_text(encoding="utf-8")[-2000:]}
+                detail = json.dumps(result, sort_keys=True)[-COMMAND_OUTPUT_SNIPPET_CHARS:]
+                raise FileNotFoundError(
+                    f"Colab yt-dlp did not produce a media file for {video_id}: {detail}"
+                )
             raise FileNotFoundError(f"Colab yt-dlp did not produce a media file for {video_id}")
         return sorted(candidates, key=lambda path: path.stat().st_size, reverse=True)[0]
 

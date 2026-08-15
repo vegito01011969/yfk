@@ -10,6 +10,23 @@ from pathlib import Path
 REMOTE_DIR = Path("/content/viral_pipeline_download")
 JOB_PATH = REMOTE_DIR / "job.json"
 RESULT_ZIP = REMOTE_DIR / "result.zip"
+RESULT_JSON = REMOTE_DIR / "result.json"
+
+
+def _write_result(status: str, **payload: object) -> None:
+    RESULT_JSON.write_text(
+        json.dumps({"status": status, **payload}, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def _write_archive(downloads_dir: Path) -> None:
+    with zipfile.ZipFile(RESULT_ZIP, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        if RESULT_JSON.exists():
+            archive.write(RESULT_JSON, RESULT_JSON.name)
+        for path in downloads_dir.iterdir():
+            if path.is_file():
+                archive.write(path, path.name)
 
 
 def main() -> None:
@@ -17,14 +34,22 @@ def main() -> None:
     downloads_dir = REMOTE_DIR / "downloads"
     downloads_dir.mkdir(parents=True, exist_ok=True)
 
-    subprocess.run(
+    install_commands = [
         [sys.executable, "-m", "pip", "install", "--upgrade", job["yt_dlp_requirement"]],
-        check=True,
-    )
-    subprocess.run(
         [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp-getpot-wpc==1.0.0"],
-        check=True,
-    )
+    ]
+    for install_command in install_commands:
+        result = subprocess.run(install_command, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            _write_result(
+                "install_failed",
+                command=install_command,
+                returncode=result.returncode,
+                stdout=result.stdout[-4000:],
+                stderr=result.stderr[-4000:],
+            )
+            _write_archive(downloads_dir)
+            return
 
     output_template = downloads_dir / f"{job['video_id']}.%(ext)s"
     command = [
@@ -63,12 +88,20 @@ def main() -> None:
         command.append("--verbose")
     command.append(job["url"])
 
-    subprocess.run(command, check=True)
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        _write_result(
+            "download_failed",
+            command=command,
+            returncode=result.returncode,
+            stdout=result.stdout[-8000:],
+            stderr=result.stderr[-8000:],
+        )
+        _write_archive(downloads_dir)
+        return
 
-    with zipfile.ZipFile(RESULT_ZIP, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in downloads_dir.iterdir():
-            if path.is_file():
-                archive.write(path, path.name)
+    _write_result("ok", command=command)
+    _write_archive(downloads_dir)
 
 
 if __name__ == "__main__":
