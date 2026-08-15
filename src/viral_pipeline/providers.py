@@ -225,6 +225,95 @@ KIDS_FUNNY_EXCLUDED_TERMS = {
     "trailer",
 }
 
+FOOTBALL_CORE_TERMS = {
+    "assist",
+    "ball",
+    "club",
+    "corner",
+    "cup",
+    "defender",
+    "fans",
+    "football",
+    "free",
+    "freekick",
+    "futsal",
+    "goal",
+    "goalkeeper",
+    "goals",
+    "header",
+    "keeper",
+    "league",
+    "match",
+    "penalty",
+    "player",
+    "referee",
+    "save",
+    "saves",
+    "soccer",
+    "stadium",
+    "striker",
+    "tackle",
+    "team",
+    "volley",
+}
+
+FOOTBALL_MOMENT_TERMS = {
+    "amazing",
+    "best",
+    "celebration",
+    "comeback",
+    "crazy",
+    "dribble",
+    "dribbling",
+    "epic",
+    "fail",
+    "fails",
+    "funniest",
+    "funny",
+    "impossible",
+    "incredible",
+    "insane",
+    "last",
+    "minute",
+    "moments",
+    "nutmeg",
+    "red",
+    "save",
+    "saves",
+    "skill",
+    "skills",
+    "stoppage",
+    "unbelievable",
+    "unexpected",
+    "viral",
+}
+
+FOOTBALL_EXCLUDED_TERMS = {
+    "career",
+    "cartoon",
+    "eafc",
+    "fc24",
+    "fc25",
+    "fifa",
+    "game",
+    "gameplay",
+    "highlights",
+    "interview",
+    "lyrics",
+    "minecraft",
+    "news",
+    "pack",
+    "packs",
+    "podcast",
+    "roblox",
+    "rumor",
+    "rumors",
+    "song",
+    "transfer",
+    "transfers",
+    "trailer",
+}
+
 
 class YouTubeApiError(RuntimeError):
     """Raised when a YouTube API call fails without exposing credentials."""
@@ -443,6 +532,22 @@ def _shorts_search_queries(
             fallback = "funny kids shorts"
         queries.append(_append_language_to_query(fallback, language))
         queries.append(_append_language_to_query("funny kids shorts", language))
+    if settings and settings.content_domain == "football":
+        lowered = query.lower()
+        if "save" in lowered or "goalkeeper" in lowered or "keeper" in lowered:
+            fallback = "best football saves shorts"
+        elif "skill" in lowered or "dribble" in lowered or "nutmeg" in lowered:
+            fallback = "incredible football skills shorts"
+        elif "fail" in lowered or "funny" in lowered:
+            fallback = "funny football fails shorts"
+        elif "celebration" in lowered:
+            fallback = "football celebrations shorts"
+        elif "last minute" in lowered or "comeback" in lowered:
+            fallback = "last minute football goals shorts"
+        else:
+            fallback = "crazy football moments shorts"
+        queries.append(_append_language_to_query(fallback, language))
+        queries.append(_append_language_to_query("viral football moments shorts", language))
 
     deduped: list[str] = []
     for item in queries:
@@ -528,6 +633,59 @@ def _kids_funny_relevance_score(video: YouTubeVideo, query: str) -> float:
         score -= 0.2
 
     return round(max(0.0, min(1.0, score)), 4)
+
+
+def _football_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & FOOTBALL_CORE_TERMS
+    moment_matches = tokens & FOOTBALL_MOMENT_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & FOOTBALL_EXCLUDED_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.38, 0.2 + len(core_matches) * 0.035)
+    if moment_matches:
+        score += min(0.34, 0.14 + len(moment_matches) * 0.04)
+    if query_matches:
+        score += min(0.18, len(query_matches) * 0.035)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.6, 0.3 + len(excluded_matches) * 0.06)
+    if not core_matches:
+        score -= 0.3
+    if not moment_matches:
+        score -= 0.12
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
+def _domain_relevance_score(
+    settings: Settings | None,
+    video: YouTubeVideo,
+    query: str,
+) -> float:
+    if settings and settings.content_domain == "kids_funny":
+        return _kids_funny_relevance_score(video, query)
+    if settings and settings.content_domain == "football":
+        return _football_relevance_score(video, query)
+    return 0.75
+
+
+def _domain_relevance_threshold(settings: Settings | None) -> float | None:
+    if settings and settings.content_domain in {"kids_funny", "football"}:
+        return 0.45
+    return None
 
 
 def _video_ids_from_search_items(items: list[dict[str, Any]]) -> list[str]:
@@ -921,23 +1079,18 @@ class YouTubeDataProvider:
         for video in short_videos:
             updated = video.model_copy(deep=True)
             search_query = str(updated.metadata.get("search_query") or search_queries[0])
-            relevance_score = (
-                _kids_funny_relevance_score(updated, search_query)
-                if self.settings and self.settings.content_domain == "kids_funny"
-                else 0.75
-            )
+            relevance_score = _domain_relevance_score(self.settings, updated, search_query)
             updated.metadata["primary_search_query"] = search_queries[0]
             updated.metadata["source_language"] = language
             updated.metadata["search_relevance_score"] = relevance_score
             if updated.id in seen_ids:
                 updated.metadata["filtered_reason"] = "previously_seen_source_video"
                 continue
-            if (
-                self.settings
-                and self.settings.content_domain == "kids_funny"
-                and relevance_score < 0.45
-            ):
-                updated.metadata["filtered_reason"] = "low_kids_funny_relevance"
+            threshold = _domain_relevance_threshold(self.settings)
+            if threshold is not None and relevance_score < threshold:
+                updated.metadata["filtered_reason"] = (
+                    f"low_{self.settings.content_domain}_relevance"
+                )
                 continue
             fresh_videos.append(updated)
         return sorted(
@@ -1444,7 +1597,7 @@ class GroqMetadataScriptProvider:
             "You are a YouTube packaging assistant for short compilation videos. "
             "Generate publish metadata only. Do not invent claims about ownership, "
             "permission, or the people in the clips. Keep language platform-safe, "
-            "concise, and suitable for a family/funny clips compilation. Return valid JSON only."
+            "concise, and suitable for the configured compilation niche. Return valid JSON only."
         )
         user_prompt = json.dumps(
             {
@@ -1518,11 +1671,11 @@ def _normalize_youtube_metadata(
     payload: dict[str, Any],
     clips: list[ClipCandidate],
 ) -> dict[str, Any]:
-    title = str(payload.get("title") or f"Top {len(clips)} Funny Kid Clips").strip()
+    title = str(payload.get("title") or f"Top {len(clips)} Shorts").strip()
     title = title[:95].strip()
     description = str(payload.get("description") or "").strip()
     if not description:
-        description = f"Top {len(clips)} funny kid clips selected from short-video sources."
+        description = f"Top {len(clips)} clips selected from short-video sources."
 
     raw_tags = payload.get("tags")
     tags = (
@@ -1718,7 +1871,7 @@ def build_providers(
     )
     trend_provider: TrendProvider = (
         CompilationQueryProvider(settings)
-        if settings.content_domain in {"kids_funny", "compilation"}
+        if settings.content_domain in {"kids_funny", "football", "compilation"}
         else YouTubeTrendProvider(settings, youtube_client)
         if youtube_client
         else LocalTrendProvider()

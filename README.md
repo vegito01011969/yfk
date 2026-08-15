@@ -1,6 +1,6 @@
-# Automated Kids Funny-Moments Compilation Pipeline
+# Automated Football Shorts Compilation Pipeline
 
-This project is a modular pipeline for discovering kids/family funny-moment YouTube Shorts or very short videos, ranking the strongest moments, assembling a clean clip-only compilation video, and storing intermediate metadata for resume/debug workflows.
+This branch contains a modular pipeline for discovering viral football/soccer YouTube Shorts or very short videos, ranking the strongest moments, assembling a clean clip-only compilation video, and storing intermediate metadata for resume/debug workflows.
 
 The code is structured as a production foundation rather than a one-off script. Each stage has a narrow interface and can be replaced independently as better providers, ranking models, or renderers are added.
 
@@ -13,12 +13,13 @@ The code is structured as a production foundation rather than a one-off script. 
 - YouTube Data API search when `YOUTUBE_API_KEY` is configured.
 - Deterministic local fallback providers for development and CI.
 - Optional real adapters for YouTube Data API, `yt-dlp`, `ffmpeg`, Groq/OpenAI-compatible metadata generation, and OpenAI voice generation.
+- Searches football moment buckets such as crazy moments, unbelievable goals, skills, saves, fails, celebrations, comebacks, referee moments, and penalty saves.
 - Downloads top Shorts or very short videos before clip extraction.
 - Treats each short video as a candidate moment by default, then groups and ranks moments before final assembly.
 - Produces a clip-only compilation by default: no title card, no numbering overlays, and no narration.
 - Runs the final compilation through the local provenance robustness transform by default, then uses that transformed file as the publish-ready output.
 - Tracks previously downloaded source video IDs in a small source-history file to avoid repeat runs reusing the same Shorts.
-- Locks each run to one source language bucket, currently English or Hindi by default.
+- Locks each run to one source language bucket. This branch defaults to English football sources.
 - Publishing package manifest with metadata, selected clips, and final render path.
 
 ## Quick Start
@@ -61,12 +62,12 @@ viral-pipeline run
 
 Key environment variables:
 
-- `CONTENT_DOMAIN`: pipeline domain. Default: `kids_funny`.
-- `CONTENT_LABEL`: label used for publish titles. Default: `Funny Kid Clips`.
+- `CONTENT_DOMAIN`: pipeline domain. Default on this branch: `football`.
+- `CONTENT_LABEL`: label used for publish titles. Default on this branch: `Football Moments`.
 - `SOURCE_LANGUAGE_MODE`: language selection strategy. Default: `cycle`.
-- `SOURCE_LANGUAGES`: comma-separated source languages to rotate through. Default: `en,hi`.
-- `SOURCE_HISTORY_PATH`: JSON source catalog used to avoid repeated YouTube source videos across runs. Default: `data/source_video_history.json`.
-- `COMPILATION_QUERIES`: comma-separated searches such as `funny toddler fails shorts`, `kids pranks shorts`, and `funny baby reactions shorts`.
+- `SOURCE_LANGUAGES`: comma-separated source languages to rotate through. Default on this branch: `en`.
+- `SOURCE_HISTORY_PATH`: JSON source catalog used to avoid repeated YouTube source videos across runs. Default: `data/source_video_history.json`; the GitHub Actions workflow uses `data/football_source_video_history.json`.
+- `COMPILATION_QUERIES`: comma-separated searches such as `crazy football moments shorts`, `unbelievable football goals shorts`, and `best football saves shorts`.
 - `EVENT_KEYWORDS`: comma-separated moment terms used for grouping/ranking.
 - `SOURCE_VIDEO_MODE`: source-video strategy. Default: `shorts`.
 - `MAX_SOURCE_VIDEO_SECONDS`: maximum source duration kept in shorts mode. Default: `30`.
@@ -126,4 +127,18 @@ workdir/runs/<run-id>/render/pre_provenance_final_video.mp4
 
 Uploads are controlled by `ENABLE_YOUTUBE_UPLOAD` and default to public visibility. Production use should include policy, copyright, consent, and rights-review checks as explicit gates.
 
-Kids/family short-video content can involve additional consent, privacy, and platform-policy concerns. Treat this pipeline as an editing and research system; production use needs rights clearance, consent review where applicable, and platform-policy compliance.
+Football short-video content can involve copyright, broadcast-rights, league-rights, player-likeness, and platform-policy concerns. Treat this pipeline as an editing and research system; production use needs rights clearance and platform-policy compliance.
+
+## Football Branch GitHub Actions Secrets
+
+The football branch workflow uses the same shared infrastructure secrets as the main pipeline where appropriate:
+
+- `YOUTUBE_API_KEY`
+- `GROQCLOUD_API_KEY`
+- `YOUTUBE_COOKIES_TXT`
+- `COLAB_ADC_JSON`
+
+Use separate upload credentials for the football channel:
+
+- `FOOTBALL_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON`
+- `FOOTBALL_YOUTUBE_OAUTH_TOKEN_JSON`

@@ -178,6 +178,77 @@ class FakeKidsQualityClient:
         ]
 
 
+class FakeFootballQualityClient:
+    def search_videos(
+        self,
+        *,
+        query: str,
+        max_results: int,
+        order: str = "relevance",
+        published_after: object | None = None,
+        region_code: str | None = None,
+        video_duration: str | None = None,
+        relevance_language: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return [
+            {"id": {"videoId": "gameplay"}},
+            {"id": {"videoId": "goal"}},
+            {"id": {"videoId": "transfer-news"}},
+            {"id": {"videoId": "save"}},
+        ][:max_results]
+
+    def videos_by_id(self, video_ids: list[str]) -> list[dict[str, Any]]:
+        fixtures = {
+            "gameplay": {
+                "title": "EAFC gameplay impossible goal #shorts",
+                "description": "Football game highlights",
+                "tags": ["eafc", "gameplay", "fifa"],
+                "viewCount": "3000000",
+                "likeCount": "250000",
+            },
+            "goal": {
+                "title": "Unbelievable last minute football goal #shorts",
+                "description": "The stadium crowd explodes after an impossible volley.",
+                "tags": ["football", "goal", "last minute", "volley", "soccer"],
+                "viewCount": "900000",
+                "likeCount": "90000",
+            },
+            "transfer-news": {
+                "title": "Football transfer news today #shorts",
+                "description": "Latest transfer rumors and podcast reaction",
+                "tags": ["football", "transfer", "news", "podcast"],
+                "viewCount": "2000000",
+                "likeCount": "100000",
+            },
+            "save": {
+                "title": "Crazy goalkeeper penalty save #shorts",
+                "description": "Goalkeeper save in a cup match with fans going wild.",
+                "tags": ["football", "goalkeeper", "penalty", "save", "soccer"],
+                "viewCount": "600000",
+                "likeCount": "70000",
+            },
+        }
+        return [
+            {
+                "id": video_id,
+                "snippet": {
+                    "title": fixtures[video_id]["title"],
+                    "description": fixtures[video_id]["description"],
+                    "tags": fixtures[video_id]["tags"],
+                    "channelTitle": "Fixture Channel",
+                    "publishedAt": "2026-08-08T00:00:00Z",
+                },
+                "contentDetails": {"duration": "PT14S"},
+                "statistics": {
+                    "viewCount": fixtures[video_id]["viewCount"],
+                    "likeCount": fixtures[video_id]["likeCount"],
+                    "commentCount": "5",
+                },
+            }
+            for video_id in video_ids
+        ]
+
+
 def test_youtube_trend_provider_selects_compilation_backed_topic() -> None:
     client = FakeYouTubeClient(
         topic_hits=[
@@ -312,6 +383,7 @@ def test_compilation_query_provider_rotates_query_language_bucket(tmp_path) -> N
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
+        content_domain="kids_funny",
         source_history_path=tmp_path / "source_video_history.json",
         youtube_api_key="test-key",
         max_source_video_seconds=30,
@@ -350,6 +422,7 @@ def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:
 def test_youtube_short_search_prefers_concrete_kids_funny_formats(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
+        content_domain="kids_funny",
         source_history_path=tmp_path / "source_video_history.json",
         youtube_api_key="test-key",
         max_source_video_seconds=30,
@@ -369,6 +442,32 @@ def test_youtube_short_search_prefers_concrete_kids_funny_formats(tmp_path) -> N
     )
 
     assert [video.id for video in videos] == ["toddler-prank", "baby-reaction"]
+    assert all(video.metadata["search_relevance_score"] >= 0.45 for video in videos)
+
+
+def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
+    settings = Settings(
+        _env_file=None,
+        content_domain="football",
+        source_history_path=tmp_path / "football_source_video_history.json",
+        youtube_api_key="test-key",
+        max_source_video_seconds=30,
+        source_languages="en",
+    )
+    provider = YouTubeDataProvider(settings.youtube_api_key, settings)
+    provider.client = FakeFootballQualityClient()  # type: ignore[assignment]
+
+    videos = provider.search_compilations(
+        trend=Trend(
+            id="trend-1",
+            title="crazy football moments shorts",
+            source="test",
+            metadata={"source_language": "en"},
+        ),
+        limit=3,
+    )
+
+    assert [video.id for video in videos] == ["goal", "save"]
     assert all(video.metadata["search_relevance_score"] >= 0.45 for video in videos)
 
 

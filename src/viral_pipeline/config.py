@@ -16,10 +16,10 @@ class Settings(BaseSettings):
     pipeline_db_path: Path = Field(default=Path("data/pipeline.sqlite3"))
     pipeline_workdir: Path = Field(default=Path("workdir"))
     source_history_path: Path = Field(default=Path("data/source_video_history.json"))
-    content_domain: str = "kids_funny"
-    content_label: str = "Funny Kid Clips"
+    content_domain: str = "football"
+    content_label: str = "Football Moments"
     source_language_mode: str = "cycle"
-    source_languages: str = "en,hi"
+    source_languages: str = "en"
     max_trends: int = 5
     selected_trend_count: int = 1
     max_videos_per_trend: int = 20
@@ -59,19 +59,21 @@ class Settings(BaseSettings):
         "viral trend everyone is doing,friends challenge,couples challenge"
     )
     compilation_queries: str = (
-        "funny toddler fails shorts,kids funny fails shorts,"
-        "funny toddler pranks shorts,kids pranks shorts,"
-        "funny baby reactions shorts,funny toddler reactions shorts,"
-        "kids bloopers shorts,toddler bloopers shorts,"
-        "funny sibling moments shorts,kids laughing shorts,"
-        "funny kids mispronounce words shorts,cute funny toddler shorts,"
-        "babies and kids funny shorts,kids try not to laugh shorts"
+        "crazy football moments shorts,unbelievable football goals shorts,"
+        "incredible football skills shorts,best football saves shorts,"
+        "last minute football goals shorts,football fails shorts,"
+        "funny football moments shorts,football celebrations shorts,"
+        "impossible football goals shorts,football comeback moments shorts,"
+        "football red card moments shorts,football penalty saves shorts,"
+        "football referee moments shorts,football goalkeeper moments shorts"
     )
     event_keywords: str = (
-        "laugh,laughing,funny,cute,toddler,baby,kid,kids,child,children,"
-        "reaction,reacts,fail,fails,blooper,bloopers,prank,pranks,silly,"
-        "surprise,crying,giggling,playing,family,sibling,brother,sister,"
-        "mispronounce,mispronounces"
+        "football,soccer,goal,goals,skill,skills,save,saves,goalkeeper,"
+        "keeper,penalty,free kick,freekick,header,volley,dribble,dribbling,"
+        "nutmeg,tackle,red card,yellow card,referee,var,celebration,"
+        "comeback,last minute,stoppage time,injury time,match,league,cup,"
+        "final,club,crowd,stadium,fans,fails,funny,crazy,unbelievable,"
+        "incredible,impossible"
     )
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"

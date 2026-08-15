@@ -17,7 +17,7 @@ The pipeline is organized around independently replaceable stages. Each stage re
 
 Discovery:
 
-- The default `kids_funny` mode uses configurable short-video searches such as funny toddler fails, kids pranks, baby reactions, toddler bloopers, sibling moments, and kid mispronunciations.
+- The default `football` mode uses configurable short-video searches such as crazy football moments, unbelievable goals, skills, saves, last-minute goals, fails, celebrations, comebacks, referee moments, and penalty saves.
 - Query candidates are represented by `Trend` records for compatibility with the runner, but they are discovery topics rather than channel strategy decisions.
 - Query discovery prefers the least-used query+language bucket, so each run stays thematically and linguistically coherent while rotating across buckets over time.
 - Add additional source adapters behind `TrendProvider` when useful.
@@ -26,7 +26,7 @@ Discovery:
 YouTube collection:
 
 - Expand `YouTubeDataProvider` with `videos.list` statistics and content details.
-- In `kids_funny` mode, search results are scored for real kid/toddler presence, an obvious funny payoff, query-bucket fit, and popularity; cartoons, nursery rhymes, games, trailers, and songs are demoted.
+- In `football` mode, search results are scored for real football/soccer terms, an obvious moment/payoff, query-bucket fit, and popularity; gameplay, transfer news, podcasts, trailers, cartoons, and songs are demoted.
 - Add quota-aware pagination and backoff.
 - In `SOURCE_VIDEO_MODE=shorts`, search requests ask YouTube for short videos and the collected details are filtered by `MAX_SOURCE_VIDEO_SECONDS`.
 - Search requests pass `relevanceLanguage` and local filters keep only videos matching the selected run language when metadata or title signals are strong enough.

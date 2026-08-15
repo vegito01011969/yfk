@@ -1,4 +1,4 @@
-name: scheduled-youtube-shorts-pipeline
+name: scheduled-football-shorts-pipeline
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     - cron: "0 */4 * * *"
 
 concurrency:
-  group: youtube-shorts-pipeline
+  group: football-youtube-shorts-pipeline
   cancel-in-progress: false
 
 jobs:
@@ -19,6 +19,11 @@ jobs:
 
     env:
       CI: "true"
+      CONTENT_DOMAIN: football
+      CONTENT_LABEL: Football Moments
+      SOURCE_LANGUAGE_MODE: cycle
+      SOURCE_LANGUAGES: en
+      SOURCE_HISTORY_PATH: data/football_source_video_history.json
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
       MAX_DOWNLOAD_VIDEOS: "3"
@@ -84,15 +89,15 @@ jobs:
         id: restore-state
         uses: actions/cache/restore@v4
         with:
-          path: data/source_video_history.json
-          key: pipeline-state-v2-${{ github.run_id }}
+          path: data/football_source_video_history.json
+          key: football-pipeline-state-v1-${{ github.run_id }}
           restore-keys: |
-            pipeline-state-v2-
+            football-pipeline-state-v1-
 
       - name: Materialize YouTube auth files
         env:
-          YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
-          YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.YOUTUBE_OAUTH_TOKEN_JSON }}
+          YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.FOOTBALL_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
+          YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.FOOTBALL_YOUTUBE_OAUTH_TOKEN_JSON }}
           YOUTUBE_COOKIES_TXT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
           COLAB_ADC_JSON: ${{ secrets.COLAB_ADC_JSON }}
         run: |
@@ -164,7 +169,7 @@ jobs:
         with:
           name: pipeline-failure-${{ github.run_id }}
           path: |
-            data/source_video_history.json
+            data/football_source_video_history.json
             workdir/runs/**/context.json
             workdir/runs/**/publish/publish_manifest.json
             workdir/runs/**/upload/youtube_upload.json
@@ -179,5 +184,5 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: data/source_video_history.json
-          key: pipeline-state-v2-${{ github.run_id }}
+          path: data/football_source_video_history.json
+          key: football-pipeline-state-v1-${{ github.run_id }}
