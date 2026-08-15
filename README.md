@@ -18,7 +18,7 @@ The code is structured as a production foundation rather than a one-off script. 
 - YouTube Data API search when `YOUTUBE_API_KEY` is configured.
 - Deterministic local fallback providers for development and CI.
 - Optional real adapters for YouTube Data API, `yt-dlp`, `ffmpeg`, Groq/OpenAI-compatible metadata generation, and OpenAI voice generation.
-- Supports domain-specific search buckets. The kids pipeline searches toddler/family funny moments; the football pipeline searches one focused theme per run, such as unreal saves, epic penalties, insane passes, best goals, free kicks, comebacks, nutmeg skills, or goal-line clearances.
+- Supports domain-specific search buckets. The kids pipeline searches toddler/family funny moments; the football pipeline builds one focused theme per run as `<adjective> <type> shorts`, such as `unreal football saves shorts`, `epic football penalties shorts`, `insane football passes shorts`, or `best football goals shorts`.
 - Downloads top Shorts or very short videos before clip extraction.
 - Treats each short video as a candidate moment by default, then groups and ranks moments before final assembly.
 - Produces a clip-only compilation by default: no title card, no numbering overlays, and no narration.
@@ -73,6 +73,8 @@ Key environment variables:
 - `SOURCE_LANGUAGES`: comma-separated source languages to rotate through. Defaults are selected from `CONTENT_DOMAIN`.
 - `SOURCE_HISTORY_PATH`: JSON source catalog used to avoid repeated YouTube source videos across runs. The kids workflow uses `data/source_video_history.json`; the football workflow uses `data/football_source_video_history.json`.
 - `COMPILATION_QUERIES`: comma-separated searches. Defaults are selected from `CONTENT_DOMAIN`. In `CONTENT_DOMAIN=football`, each run chooses one focused football theme and expands only to related query variants; the pipeline defensively adds `football` to any configured search query that omits it.
+- `FOOTBALL_QUERY_ADJECTIVES`: comma-separated adjective pool for generated football themes. Default includes `unreal`, `epic`, `unforgettable`, `insane`, `best`, `impossible`, and similar terms.
+- `FOOTBALL_QUERY_TYPES`: comma-separated football type pool for generated football themes. Default includes `football saves`, `football penalties`, `football passes`, `football goals`, `football free kicks`, and similar types.
 - `EVENT_KEYWORDS`: comma-separated moment terms used for grouping/ranking.
 - `SOURCE_VIDEO_MODE`: source-video strategy. Default: `shorts`.
 - `MAX_SOURCE_VIDEO_SECONDS`: maximum source duration kept in shorts mode. Default: `30`.

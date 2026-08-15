@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import random
 import re
 import subprocess
 import sys
@@ -602,6 +603,10 @@ def _domain_search_query(query: str, settings: Settings | None) -> str:
     return query
 
 
+def _ensure_shorts_query(query: str) -> str:
+    return query if "short" in query.lower() else f"{query} shorts"
+
+
 def _football_theme(query: str) -> str:
     lowered = query.lower()
     if any(term in lowered for term in ("save", "goalkeeper", "keeper")):
@@ -638,7 +643,7 @@ def _shorts_search_queries(
     settings: Settings | None,
 ) -> list[str]:
     query = _domain_search_query(query, settings)
-    base_query = query if "short" in query.lower() else f"{query} shorts"
+    base_query = _ensure_shorts_query(query)
     queries = [_append_language_to_query(base_query, language)]
     if settings and settings.content_domain == "kids_funny":
         lowered = query.lower()
@@ -947,11 +952,7 @@ class CompilationQueryProvider:
         self.history = SourceHistory(settings.source_history_path)
 
     def discover(self, limit: int) -> list[Trend]:
-        queries = [
-            query.strip()
-            for query in self.settings.compilation_queries.split(",")
-            if query.strip()
-        ]
+        queries = _compilation_queries(self.settings)
         languages = (
             _source_languages(self.settings)
             if self.settings.source_language_mode == "cycle"
@@ -962,12 +963,14 @@ class CompilationQueryProvider:
             for query in queries
             for language in languages
         ]
+        if self.settings.content_domain == "football":
+            random.shuffle(candidates)
         candidates = sorted(
             candidates,
             key=lambda item: (
                 int(self.history.query_stats(item[0], item[1]).get("run_count") or 0),
                 str(self.history.query_stats(item[0], item[1]).get("last_used_at") or ""),
-                queries.index(item[0]),
+                queries.index(item[0]) if self.settings.content_domain != "football" else 0,
                 languages.index(item[1]),
             ),
         )
@@ -994,6 +997,36 @@ class CompilationQueryProvider:
                 )
             )
         return trends
+
+
+def _settings_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _football_query_combinations(settings: Settings) -> list[str]:
+    adjectives = _settings_csv(settings.football_query_adjectives)
+    types = _settings_csv(settings.football_query_types)
+    return [
+        _ensure_shorts_query(_ensure_football_query(f"{adjective} {query_type}"))
+        for query_type in types
+        for adjective in adjectives
+    ]
+
+
+def _compilation_queries(settings: Settings) -> list[str]:
+    if settings.content_domain == "football":
+        generated = _football_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    else:
+        queries = _settings_csv(settings.compilation_queries)
+
+    deduped: list[str] = []
+    for query in queries:
+        normalized = _domain_search_query(query, settings)
+        if normalized not in deduped:
+            deduped.append(normalized)
+    return deduped
 
 
 class YouTubeTrendProvider:

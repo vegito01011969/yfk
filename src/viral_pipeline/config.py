@@ -37,11 +37,20 @@ FOOTBALL_ACTIVITY_SEED_QUERIES = (
 FOOTBALL_COMPILATION_QUERIES = (
     "unreal football saves shorts,epic football penalties shorts,"
     "unforgettable football moments shorts,insane football passes shorts,"
-    "best football goals shorts,impossible football free kicks shorts,"
-    "crazy football goalkeeper saves shorts,legendary football comebacks shorts,"
-    "football last minute goals shorts,football nutmeg skills shorts,"
-    "football volley goals shorts,football red card drama shorts,"
-    "football goal line clearances shorts,football skills that shocked everyone shorts"
+    "best football goals shorts,impossible football free kicks shorts"
+)
+
+FOOTBALL_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
+)
+
+FOOTBALL_QUERY_TYPES = (
+    "football saves,football penalties,football moments,football passes,"
+    "football goals,football free kicks,football goalkeeper saves,"
+    "football comebacks,football last minute goals,football nutmeg skills,"
+    "football volley goals,football red card drama,football goal line clearances,"
+    "football skills"
 )
 
 FOOTBALL_EVENT_KEYWORDS = (
@@ -104,6 +113,8 @@ class Settings(BaseSettings):
     youtube_trend_lookback_hours: int = 168
     youtube_activity_seed_queries: str = ""
     compilation_queries: str = ""
+    football_query_adjectives: str = FOOTBALL_QUERY_ADJECTIVES
+    football_query_types: str = FOOTBALL_QUERY_TYPES
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"

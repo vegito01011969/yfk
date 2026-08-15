@@ -421,7 +421,8 @@ def test_settings_apply_domain_specific_defaults() -> None:
 
     assert football.content_label == "Football Moments"
     assert football.source_languages == "en"
-    assert football.compilation_queries.split(",")[0] == "unreal football saves shorts"
+    assert football.football_query_adjectives.split(",")[0] == "unreal"
+    assert football.football_query_types.split(",")[0] == "football saves"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -431,15 +432,54 @@ def test_football_compilation_query_provider_enforces_football_keyword(tmp_path)
         source_history_path=tmp_path / "football_source_video_history.json",
         source_languages="en",
         compilation_queries="crazy goals shorts,penalty saves shorts",
+        football_query_adjectives="",
+        football_query_types="",
     )
 
     trends = CompilationQueryProvider(settings).discover(limit=2)
 
-    assert [trend.title for trend in trends] == [
+    assert {trend.title for trend in trends} == {
         "football crazy goals shorts",
         "football penalty saves shorts",
-    ]
-    assert trends[0].metadata["raw_query"] == "crazy goals shorts"
+    }
+    assert {trend.metadata["raw_query"] for trend in trends} == {
+        "football crazy goals shorts",
+        "football penalty saves shorts",
+    }
+
+
+def test_football_compilation_query_provider_generates_adjective_type_combinations(
+    tmp_path,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        content_domain="football",
+        source_history_path=tmp_path / "football_source_video_history.json",
+        source_languages="en",
+        compilation_queries=(
+            "unreal football saves shorts,epic football saves shorts,"
+            "unreal football penalties shorts,epic football penalties shorts"
+        ),
+        football_query_adjectives="unreal,epic",
+        football_query_types="football saves,football penalties",
+    )
+    SourceHistory(settings.source_history_path).mark_query_used(
+        "unreal football saves shorts",
+        "previous-run",
+        language="en",
+    )
+
+    trends = CompilationQueryProvider(settings).discover(limit=3)
+
+    titles = {trend.title for trend in trends}
+    assert "unreal football saves shorts" not in titles
+    assert titles <= {
+        "epic football saves shorts",
+        "unreal football penalties shorts",
+        "epic football penalties shorts",
+    }
+    assert len(titles) == 3
+    assert all(trend.title.endswith(" shorts") for trend in trends)
 
 
 def test_football_short_queries_stay_inside_selected_theme() -> None:
