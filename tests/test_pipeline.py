@@ -11,6 +11,7 @@ from viral_pipeline.domain import (
     ClipCandidate,
     NarrationScript,
     PipelineContext,
+    PublishPackage,
     RenderAsset,
     RunStatus,
     StageName,
@@ -340,6 +341,41 @@ def test_download_stage_respects_max_download_attempts(tmp_path: Path) -> None:
     assert attempted == ["video-0", "video-1"]
 
 
+def test_download_stage_can_continue_when_no_downloads_succeed(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.fail_on_no_source_downloads = False
+
+    class AlwaysFailProvider:
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            raise FileNotFoundError(video.id)
+
+    context = PipelineContext(
+        run_id="download-skip-test",
+        workdir=tmp_path,
+        selected_trends=[
+            Trend(
+                title="football goals shorts",
+                source="test",
+                metadata={"source_language": "en"},
+            )
+        ],
+        analyzed_videos=[
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Football goal short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+    )
+
+    context = DownloadVideosStage(settings, AlwaysFailProvider()).run(context)
+
+    assert context.analyzed_videos == []
+    history = SourceHistory(settings.source_history_path)._data()
+    assert history["videos"]["video-1"]["stage"] == "download_failed"
+
+
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 
@@ -555,6 +591,52 @@ def test_upload_youtube_stage_skips_when_disabled(tmp_path: Path) -> None:
     assert context.youtube_upload is not None
     assert context.youtube_upload.status == "skipped"
     assert context.youtube_upload.path.exists()
+
+
+def test_upload_youtube_stage_skips_when_no_clips_were_selected(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.enable_youtube_upload = True
+    context = PipelineContext(run_id="upload-no-clips-test", workdir=tmp_path)
+
+    context = UploadYouTubeStage(settings).run(context)
+
+    assert context.youtube_upload is not None
+    assert context.youtube_upload.status == "skipped"
+    assert "No selected clips" in context.youtube_upload.metadata["reason"]
+
+
+def test_upload_youtube_stage_skips_non_video_render_path(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.enable_youtube_upload = True
+    manifest_path = tmp_path / "render" / "edit_decision_manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text("{}", encoding="utf-8")
+    context = PipelineContext(
+        run_id="upload-manifest-test",
+        workdir=tmp_path,
+        selected_clips=[
+            ClipCandidate(
+                video_id="video-1",
+                trend_id="trend-1",
+                start_seconds=0,
+                end_seconds=10,
+                title="Selected clip",
+            )
+        ],
+        publish_package=PublishPackage(
+            path=tmp_path / "publish" / "publish_manifest.json",
+            title="Title",
+            description="Description",
+            tags=[],
+            metadata={"render_path": str(manifest_path)},
+        ),
+    )
+
+    context = UploadYouTubeStage(settings).run(context)
+
+    assert context.youtube_upload is not None
+    assert context.youtube_upload.status == "skipped"
+    assert "did not reference a video render" in context.youtube_upload.metadata["reason"]
 
 
 class FakeChannelsRequest:

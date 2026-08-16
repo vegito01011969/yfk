@@ -784,6 +784,12 @@ class DownloadVideosStage(PipelineStage):
                     language=language,
                     stage="download_failed",
                 )
+            if not self.settings.fail_on_no_source_downloads:
+                LOGGER.warning(
+                    "No source videos could be downloaded; continuing as a skipped media run"
+                )
+                context.analyzed_videos = []
+                return context
             if failed and all(
                 video.metadata.get("download_error_kind") == "youtube_bot_wall"
                 for video in failed
@@ -1262,10 +1268,38 @@ class UploadYouTubeStage(PipelineStage):
             )
             return context
 
+        if not context.selected_clips:
+            context.youtube_upload = YouTubeUploadResult(
+                path=result_path,
+                status="skipped",
+                privacy_status=self.settings.youtube_upload_privacy_status,
+                metadata={"reason": "No selected clips were produced for this run"},
+            )
+            result_path.write_text(
+                context.youtube_upload.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+            return context
+
         _require_expected_upload_channel_for_domain(self.settings)
         if context.publish_package is None:
             raise ValueError("Cannot upload before publish package is prepared")
         render_path = Path(context.publish_package.metadata.get("render_path") or "")
+        if render_path.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}:
+            context.youtube_upload = YouTubeUploadResult(
+                path=result_path,
+                status="skipped",
+                privacy_status=self.settings.youtube_upload_privacy_status,
+                metadata={
+                    "reason": "Publish package did not reference a video render",
+                    "render_path": str(render_path),
+                },
+            )
+            result_path.write_text(
+                context.youtube_upload.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+            return context
         if not render_path.exists():
             raise FileNotFoundError(f"Upload render path not found: {render_path}")
 
