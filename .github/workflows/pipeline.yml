@@ -12,7 +12,7 @@ concurrency:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     permissions:
       contents: read
       actions: write
@@ -28,11 +28,11 @@ jobs:
       DOWNLOAD_BACKEND: colab
       MAX_DOWNLOAD_VIDEOS: "5"
       MAX_DOWNLOAD_ATTEMPTS: "12"
-      MAX_DOWNLOAD_STAGE_SECONDS: "1200"
+      MAX_DOWNLOAD_STAGE_SECONDS: "900"
       MIN_DOWNLOAD_VIDEOS_FOR_UPLOAD: "2"
       FAIL_ON_NO_SOURCE_DOWNLOADS: "false"
-      PIPELINE_UPLOAD_ATTEMPTS: "2"
-      PIPELINE_ATTEMPT_TIMEOUT_SECONDS: "1800"
+      PIPELINE_UPLOAD_ATTEMPTS: "1"
+      PIPELINE_ATTEMPT_TIMEOUT_SECONDS: "1200"
       PIPELINE_REQUIRE_UPLOAD: "true"
       ENABLE_YOUTUBE_UPLOAD: "true"
       YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"
@@ -46,12 +46,13 @@ jobs:
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
       YT_DLP_COOKIES_PATH: secrets/youtube_cookies.txt
       YT_DLP_JS_RUNTIMES: node
-      YT_DLP_VERBOSE: "true"
-      YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "210"
+      YT_DLP_VERBOSE: "false"
+      YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "150"
       COLAB_CLI_AUTH: adc
       GOOGLE_APPLICATION_CREDENTIALS: secrets/colab_adc.json
       COLAB_UPLOAD_YOUTUBE_COOKIES: "true"
-      COLAB_COMMAND_TIMEOUT_SECONDS: "360"
+      COLAB_COMMAND_TIMEOUT_SECONDS: "240"
+      COLAB_ENABLE_BROWSER_PO_TOKEN: "false"
 
     steps:
       - name: Check out repository

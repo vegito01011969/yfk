@@ -102,10 +102,14 @@ def main() -> None:
     downloads_dir = REMOTE_DIR / "downloads"
     downloads_dir.mkdir(parents=True, exist_ok=True)
 
+    enable_browser_po_token = bool(job.get("enable_browser_po_token"))
     install_commands = [
         [sys.executable, "-m", "pip", "install", "--upgrade", job["yt_dlp_requirement"]],
-        [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp-getpot-wpc==1.0.0"],
     ]
+    if enable_browser_po_token:
+        install_commands.append(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp-getpot-wpc==1.0.0"]
+        )
     for install_command in install_commands:
         result = subprocess.run(install_command, check=False, capture_output=True, text=True)
         if result.returncode != 0:
@@ -120,7 +124,7 @@ def main() -> None:
             return
 
     deno_path = _install_deno()
-    chrome_path = _install_chrome()
+    chrome_path = _install_chrome() if enable_browser_po_token else None
     output_template = downloads_dir / f"{job['video_id']}.%(ext)s"
     command = [
         sys.executable,
@@ -146,7 +150,7 @@ def main() -> None:
     extractor_args_values = job.get("extractor_args") or [
         "youtube:player_client=mweb,web_safari,web_embedded,tv_simply,android_vr"
     ]
-    if chrome_path:
+    if enable_browser_po_token and chrome_path:
         extractor_args_values.append(f"youtubepot-wpc:browser_path={chrome_path}")
     for extractor_args in extractor_args_values:
         command.extend(["--extractor-args", str(extractor_args)])

@@ -1697,6 +1697,7 @@ class ColabYtDlpVideoDownloadProvider:
                     "verbose": self.settings.yt_dlp_verbose,
                     "yt_dlp_requirement": self.settings.colab_yt_dlp_requirement,
                     "download_timeout_seconds": self.settings.yt_dlp_download_timeout_seconds,
+                    "enable_browser_po_token": self.settings.colab_enable_browser_po_token,
                 },
                 indent=2,
                 sort_keys=True,
