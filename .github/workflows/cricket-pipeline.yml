@@ -26,8 +26,9 @@ jobs:
       SOURCE_HISTORY_PATH: data/cricket_source_video_history.json
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
-      MAX_DOWNLOAD_VIDEOS: "2"
+      MAX_DOWNLOAD_VIDEOS: "5"
       MAX_DOWNLOAD_ATTEMPTS: "30"
+      MIN_DOWNLOAD_VIDEOS_FOR_UPLOAD: "2"
       FAIL_ON_NO_SOURCE_DOWNLOADS: "false"
       ENABLE_YOUTUBE_UPLOAD: "true"
       YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"

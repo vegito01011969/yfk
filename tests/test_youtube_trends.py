@@ -484,7 +484,8 @@ def test_compilation_query_provider_prefers_unused_query_bucket(tmp_path) -> Non
 
     trends = CompilationQueryProvider(settings).discover(limit=2)
 
-    assert trends[0].title == "toddler reaction shorts"
+    assert trends[0].title in {"toddler reaction shorts", "kids bloopers shorts"}
+    assert "funny kids shorts" not in {trend.title for trend in trends}
 
 
 def test_compilation_query_provider_rotates_query_language_bucket(tmp_path) -> None:

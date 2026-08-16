@@ -19,7 +19,7 @@ The code is structured as a production foundation rather than a one-off script. 
 - YouTube Data API search when `YOUTUBE_API_KEY` is configured.
 - Deterministic local fallback providers for development and CI.
 - Optional real adapters for YouTube Data API, `yt-dlp`, `ffmpeg`, Groq/OpenAI-compatible metadata generation, and OpenAI voice generation.
-- Supports domain-specific search buckets. The kids pipeline searches toddler/family funny moments; the football and cricket pipelines build one focused theme per run as `<adjective> <type> shorts`, such as `unreal football saves shorts`, `epic football penalties shorts`, `unreal cricket catches shorts`, or `best cricket wickets shorts`.
+- Supports domain-specific search buckets. The kids pipeline randomly chooses among least-used toddler/family funny synonym buckets; the football and cricket pipelines build one focused theme per run as `<adjective> <type> shorts`, such as `unreal football saves shorts`, `epic football penalties shorts`, `unreal cricket catches shorts`, or `best cricket wickets shorts`.
 - Downloads top Shorts or very short videos before clip extraction.
 - Treats each short video as a candidate moment by default, then groups and ranks moments before final assembly.
 - Produces a clip-only compilation by default: no title card, no numbering overlays, and no narration.
@@ -82,7 +82,8 @@ Key environment variables:
 - `SOURCE_VIDEO_MODE`: source-video strategy. Default: `shorts`.
 - `MAX_SOURCE_VIDEO_SECONDS`: maximum source duration kept in shorts mode. Default: `30`.
 - `SELECTED_TREND_COUNT`: number of query candidates to process. Default: `1`.
-- `MAX_DOWNLOAD_VIDEOS`: top short videos to download. Default: `10`.
+- `MAX_DOWNLOAD_VIDEOS`: target number of top short videos to download. Default: `10`; scheduled workflows try for `5`.
+- `MIN_DOWNLOAD_VIDEOS_FOR_UPLOAD`: minimum successful source downloads required before rendering/uploading. Default: `1`; scheduled workflows require `2`.
 - `MAX_CLIPS`: number of final selected clips. Default: `5`.
 - `YOUTUBE_SEARCH_POOL_SIZE`: candidate pool requested before previous-source filtering. Default: `50`.
 - `YOUTUBE_API_KEY`: enables YouTube Data API search.

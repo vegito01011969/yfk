@@ -775,7 +775,8 @@ class DownloadVideosStage(PipelineStage):
                 )
                 LOGGER.warning("Skipping failed download for %s: %s%s", video.id, exc, output)
                 continue
-        if not downloaded:
+        min_downloads = max(1, self.settings.min_download_videos_for_upload)
+        if len(downloaded) < min_downloads:
             if failed:
                 SourceHistory(self.settings.source_history_path).mark_videos_seen(
                     failed,
@@ -784,9 +785,20 @@ class DownloadVideosStage(PipelineStage):
                     language=language,
                     stage="download_failed",
                 )
+            if downloaded:
+                SourceHistory(self.settings.source_history_path).mark_videos_seen(
+                    downloaded,
+                    run_id=context.run_id,
+                    query=query,
+                    language=language,
+                    stage="downloaded_below_publish_minimum",
+                )
             if not self.settings.fail_on_no_source_downloads:
                 LOGGER.warning(
-                    "No source videos could be downloaded; continuing as a skipped media run"
+                    "Only %s source video(s) could be downloaded; minimum for upload is %s. "
+                    "Continuing as a skipped media run.",
+                    len(downloaded),
+                    min_downloads,
                 )
                 context.analyzed_videos = []
                 return context
@@ -795,12 +807,16 @@ class DownloadVideosStage(PipelineStage):
                 for video in failed
             ):
                 raise RuntimeError(
-                    "No source videos could be downloaded: YouTube returned its bot-check "
-                    "wall for every candidate on this runner. GitHub-hosted runner IPs are "
-                    "still blocked even with cookies, alternate YouTube clients, and the "
-                    "configured PO-token provider."
+                    f"Only {len(downloaded)} source video(s) could be downloaded; minimum "
+                    f"for upload is {min_downloads}. YouTube returned its bot-check wall "
+                    "for every failed candidate on this runner. GitHub-hosted runner IPs "
+                    "are still blocked even with cookies, alternate YouTube clients, and "
+                    "the configured PO-token provider."
                 )
-            raise RuntimeError("No source videos could be downloaded")
+            raise RuntimeError(
+                f"Only {len(downloaded)} source video(s) could be downloaded; minimum "
+                f"for upload is {min_downloads}"
+            )
         context.analyzed_videos = downloaded
         SourceHistory(self.settings.source_history_path).mark_videos_seen(
             downloaded,

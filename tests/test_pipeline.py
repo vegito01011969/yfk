@@ -299,7 +299,7 @@ def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Pat
     try:
         DownloadVideosStage(settings, AlwaysFailProvider()).run(context)
     except RuntimeError as exc:
-        assert "No source videos" in str(exc)
+        assert "Only 0 source video" in str(exc)
     else:
         raise AssertionError("download stage should fail when no downloads succeed")
 
@@ -374,6 +374,52 @@ def test_download_stage_can_continue_when_no_downloads_succeed(tmp_path: Path) -
     assert context.analyzed_videos == []
     history = SourceHistory(settings.source_history_path)._data()
     assert history["videos"]["video-1"]["stage"] == "download_failed"
+
+
+def test_download_stage_skips_when_below_minimum_downloads(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.max_download_videos = 5
+    settings.min_download_videos_for_upload = 2
+    settings.fail_on_no_source_downloads = False
+
+    class OneSuccessProvider:
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            if video.id == "video-1":
+                output_dir.mkdir(parents=True, exist_ok=True)
+                path = output_dir / "video-1.mp4"
+                path.write_text("media", encoding="utf-8")
+                updated = video.model_copy(deep=True)
+                updated.downloaded_path = path
+                return updated
+            raise FileNotFoundError(video.id)
+
+    context = PipelineContext(
+        run_id="download-below-minimum-test",
+        workdir=tmp_path,
+        selected_trends=[
+            Trend(
+                title="football goals shorts",
+                source="test",
+                metadata={"source_language": "en"},
+            )
+        ],
+        analyzed_videos=[
+            YouTubeVideo(
+                id=f"video-{index}",
+                trend_id="trend-1",
+                title=f"Football goal short {index}",
+                url=f"https://www.youtube.com/watch?v=video-{index}",
+            )
+            for index in range(1, 4)
+        ],
+    )
+
+    context = DownloadVideosStage(settings, OneSuccessProvider()).run(context)
+
+    assert context.analyzed_videos == []
+    history = SourceHistory(settings.source_history_path)._data()
+    assert history["videos"]["video-1"]["stage"] == "downloaded_below_publish_minimum"
+    assert history["videos"]["video-2"]["stage"] == "download_failed"
 
 
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:

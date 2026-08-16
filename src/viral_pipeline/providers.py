@@ -1194,7 +1194,8 @@ class CompilationQueryProvider:
             for query in queries
             for language in languages
         ]
-        if self.settings.content_domain in {"football", "cricket"}:
+        randomized_query_domains = {"kids_funny", "football", "cricket"}
+        if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
         candidates = sorted(
             candidates,
@@ -1202,7 +1203,7 @@ class CompilationQueryProvider:
                 int(self.history.query_stats(item[0], item[1]).get("run_count") or 0),
                 str(self.history.query_stats(item[0], item[1]).get("last_used_at") or ""),
                 queries.index(item[0])
-                if self.settings.content_domain not in {"football", "cricket"}
+                if self.settings.content_domain not in randomized_query_domains
                 else 0,
                 languages.index(item[1]),
             ),

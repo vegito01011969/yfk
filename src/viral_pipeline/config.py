@@ -18,7 +18,10 @@ KIDS_FUNNY_COMPILATION_QUERIES = (
     "kids bloopers shorts,toddler bloopers shorts,"
     "funny sibling moments shorts,kids laughing shorts,"
     "funny kids mispronounce words shorts,cute funny toddler shorts,"
-    "babies and kids funny shorts,kids try not to laugh shorts"
+    "babies and kids funny shorts,kids try not to laugh shorts,"
+    "hilarious toddler moments shorts,wholesome kids funny moments shorts,"
+    "funny family kids moments shorts,silly toddler moments shorts,"
+    "cute baby funny moments shorts,kids silly reactions shorts"
 )
 
 KIDS_FUNNY_EVENT_KEYWORDS = (
@@ -114,6 +117,7 @@ class Settings(BaseSettings):
     max_videos_per_trend: int = 20
     max_download_videos: int = 10
     max_download_attempts: int = 0
+    min_download_videos_for_upload: int = 1
     fail_on_no_source_downloads: bool = True
     youtube_search_pool_size: int = 50
     max_clips_per_video: int = 8
