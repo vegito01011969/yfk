@@ -538,6 +538,10 @@ CRICKET_THEME_QUERIES: dict[str, list[str]] = {
 class YouTubeApiError(RuntimeError):
     """Raised when a YouTube API call fails without exposing credentials."""
 
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 def _redact_api_key(text: str) -> str:
     return re.sub(r"([?&]key=)[^&\s]+", r"\1[redacted]", text)
@@ -581,8 +585,14 @@ class YouTubeApiClient:
             )
             response.raise_for_status()
         except requests.RequestException as exc:
+            status_code = (
+                exc.response.status_code
+                if isinstance(exc, requests.HTTPError) and exc.response is not None
+                else None
+            )
             raise YouTubeApiError(
-                f"YouTube API request failed for {endpoint}: {_redact_api_key(str(exc))}"
+                f"YouTube API request failed for {endpoint}: {_redact_api_key(str(exc))}",
+                status_code=status_code,
             ) from None
         payload = response.json()
         if not isinstance(payload, dict):
@@ -1455,24 +1465,54 @@ class YouTubeDataProvider:
         videos: list[YouTubeVideo] = []
         seen_search_ids: set[str] = set()
         search_queries = _shorts_search_queries(trend.title, language, self.settings)
+        focused_domain = (
+            self.settings is not None
+            and self.settings.content_domain in {"football", "cricket"}
+        )
+        if focused_domain:
+            search_queries = search_queries[:2]
+        quota_limited = False
         for search_query in search_queries:
-            for attempt_published_after in (published_after, None):
-                search_items = self.client.search_videos(
-                    query=search_query,
-                    max_results=query_pool_size,
-                    order="relevance",
-                    published_after=attempt_published_after,
-                    region_code=self.settings.youtube_region_code if self.settings else None,
-                    video_duration="short",
-                    relevance_language=language,
-                )
+            search_windows = (published_after,) if focused_domain else (published_after, None)
+            for attempt_published_after in search_windows:
+                try:
+                    search_items = self.client.search_videos(
+                        query=search_query,
+                        max_results=query_pool_size,
+                        order="relevance",
+                        published_after=attempt_published_after,
+                        region_code=self.settings.youtube_region_code if self.settings else None,
+                        video_duration="short",
+                        relevance_language=language,
+                    )
+                except YouTubeApiError as exc:
+                    if exc.status_code in {403, 429}:
+                        LOGGER.warning(
+                            "YouTube API quota/rate limit while searching %r: %s",
+                            search_query,
+                            exc,
+                        )
+                        quota_limited = True
+                        break
+                    raise
                 video_ids = [
                     video_id
                     for video_id in _video_ids_from_search_items(search_items)
                     if video_id not in seen_search_ids
                 ]
                 seen_search_ids.update(video_ids)
-                for item in self.client.videos_by_id(video_ids):
+                try:
+                    video_items = self.client.videos_by_id(video_ids)
+                except YouTubeApiError as exc:
+                    if exc.status_code in {403, 429}:
+                        LOGGER.warning(
+                            "YouTube API quota/rate limit while loading video details: %s",
+                            exc,
+                        )
+                        quota_limited = True
+                        break
+                    raise
+                for item in video_items:
                     video = _youtube_video_from_item(item, trend.id)
                     video.metadata["search_query"] = search_query
                     video.metadata["search_published_after"] = (
@@ -1487,12 +1527,56 @@ class YouTubeDataProvider:
                     and len(videos) >= pool_size
                 ):
                     break
+            if quota_limited:
+                break
             if (
                 self.settings
                 and self.settings.content_domain not in {"football", "cricket"}
                 and len(videos) >= pool_size
             ):
                 break
+        if focused_domain and not quota_limited and len(videos) < max(limit, 8):
+            for search_query in search_queries[:1]:
+                try:
+                    search_items = self.client.search_videos(
+                        query=search_query,
+                        max_results=query_pool_size,
+                        order="relevance",
+                        published_after=None,
+                        region_code=self.settings.youtube_region_code if self.settings else None,
+                        video_duration="short",
+                        relevance_language=language,
+                    )
+                except YouTubeApiError as exc:
+                    if exc.status_code in {403, 429}:
+                        LOGGER.warning(
+                            "YouTube API quota/rate limit during fallback search %r: %s",
+                            search_query,
+                            exc,
+                        )
+                        break
+                    raise
+                video_ids = [
+                    video_id
+                    for video_id in _video_ids_from_search_items(search_items)
+                    if video_id not in seen_search_ids
+                ]
+                seen_search_ids.update(video_ids)
+                try:
+                    video_items = self.client.videos_by_id(video_ids)
+                except YouTubeApiError as exc:
+                    if exc.status_code in {403, 429}:
+                        LOGGER.warning(
+                            "YouTube API quota/rate limit while loading fallback video details: %s",
+                            exc,
+                        )
+                        break
+                    raise
+                for item in video_items:
+                    video = _youtube_video_from_item(item, trend.id)
+                    video.metadata["search_query"] = search_query
+                    video.metadata["search_published_after"] = None
+                    videos.append(video)
         max_seconds = self.settings.max_source_video_seconds if self.settings else 75
         short_videos = [
             video

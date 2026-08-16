@@ -6,6 +6,7 @@ from viral_pipeline.config import Settings
 from viral_pipeline.domain import Trend, YouTubeVideo
 from viral_pipeline.providers import (
     CompilationQueryProvider,
+    YouTubeApiError,
     YouTubeDataProvider,
     YouTubeTrendProvider,
     _shorts_search_queries,
@@ -351,6 +352,24 @@ class FakeCricketQualityClient:
             }
             for video_id in video_ids
         ]
+
+
+class FakeQuotaLimitedClient:
+    def search_videos(
+        self,
+        *,
+        query: str,
+        max_results: int,
+        order: str = "relevance",
+        published_after: object | None = None,
+        region_code: str | None = None,
+        video_duration: str | None = None,
+        relevance_language: str | None = None,
+    ) -> list[dict[str, Any]]:
+        raise YouTubeApiError("quota exceeded", status_code=429)
+
+    def videos_by_id(self, video_ids: list[str]) -> list[dict[str, Any]]:
+        return []
 
 
 def test_youtube_trend_provider_selects_compilation_backed_topic() -> None:
@@ -720,6 +739,7 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
     assert [video.id for video in videos] == ["goal", "save"]
     assert all(video.metadata["search_relevance_score"] >= 0.45 for video in videos)
     assert fake_client.search_queries
+    assert len(fake_client.search_queries) <= 3
     assert all("football" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral football moments" in query.lower()
@@ -753,11 +773,38 @@ def test_youtube_short_search_prefers_real_cricket_moments(tmp_path) -> None:
     assert {video.id for video in videos} == {"catch", "six"}
     assert all(video.metadata["search_relevance_score"] >= 0.55 for video in videos)
     assert fake_client.search_queries
+    assert len(fake_client.search_queries) <= 3
     assert all("cricket" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral cricket moments" in query.lower()
         for query in fake_client.search_queries
     )
+
+
+def test_youtube_short_search_returns_empty_on_quota_limited_focused_domain(
+    tmp_path,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        content_domain="football",
+        source_history_path=tmp_path / "football_source_video_history.json",
+        youtube_api_key="test-key",
+        source_languages="en",
+    )
+    provider = YouTubeDataProvider(settings.youtube_api_key, settings)
+    provider.client = FakeQuotaLimitedClient()  # type: ignore[assignment]
+
+    videos = provider.search_compilations(
+        trend=Trend(
+            id="trend-1",
+            title="best football volleys shorts",
+            source="test",
+            metadata={"source_language": "en"},
+        ),
+        limit=6,
+    )
+
+    assert videos == []
 
 
 def test_youtube_trend_provider_filters_generic_media_terms() -> None:
