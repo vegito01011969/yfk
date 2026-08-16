@@ -26,7 +26,7 @@ jobs:
       SOURCE_HISTORY_PATH: data/football_source_video_history.json
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
-      MAX_DOWNLOAD_VIDEOS: "3"
+      MAX_DOWNLOAD_VIDEOS: "2"
       MAX_DOWNLOAD_ATTEMPTS: "30"
       FAIL_ON_NO_SOURCE_DOWNLOADS: "false"
       ENABLE_YOUTUBE_UPLOAD: "true"
