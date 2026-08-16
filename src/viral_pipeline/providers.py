@@ -1458,7 +1458,7 @@ class YouTubeDataProvider:
             max(limit * 6, limit),
         )
         query_pool_size = (
-            min(25, pool_size)
+            min(50, pool_size)
             if self.settings and self.settings.content_domain in {"football", "cricket"}
             else pool_size
         )

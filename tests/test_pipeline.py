@@ -303,7 +303,7 @@ def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Pat
         raise AssertionError("download stage should fail when no downloads succeed")
 
     history = SourceHistory(settings.source_history_path)._data()
-    assert history["videos"] == {}
+    assert history["videos"]["video-1"]["stage"] == "download_failed"
 
 
 def test_download_stage_respects_max_download_attempts(tmp_path: Path) -> None:

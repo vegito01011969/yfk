@@ -183,6 +183,7 @@ class FakeKidsQualityClient:
 class FakeFootballQualityClient:
     def __init__(self) -> None:
         self.search_queries: list[str] = []
+        self.max_results: list[int] = []
 
     def search_videos(
         self,
@@ -196,6 +197,7 @@ class FakeFootballQualityClient:
         relevance_language: str | None = None,
     ) -> list[dict[str, Any]]:
         self.search_queries.append(query)
+        self.max_results.append(max_results)
         return [
             {"id": {"videoId": "gameplay"}},
             {"id": {"videoId": "goal"}},
@@ -740,6 +742,7 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
     assert all(video.metadata["search_relevance_score"] >= 0.45 for video in videos)
     assert fake_client.search_queries
     assert len(fake_client.search_queries) == 1
+    assert fake_client.max_results == [36]
     assert all("football" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral football moments" in query.lower()

@@ -776,6 +776,14 @@ class DownloadVideosStage(PipelineStage):
                 LOGGER.warning("Skipping failed download for %s: %s%s", video.id, exc, output)
                 continue
         if not downloaded:
+            if failed:
+                SourceHistory(self.settings.source_history_path).mark_videos_seen(
+                    failed,
+                    run_id=context.run_id,
+                    query=query,
+                    language=language,
+                    stage="download_failed",
+                )
             if failed and all(
                 video.metadata.get("download_error_kind") == "youtube_bot_wall"
                 for video in failed
