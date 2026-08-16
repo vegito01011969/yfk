@@ -148,6 +148,24 @@ PROFILES = (
     ),
 )
 
+VALIDATION_RESCUE_PROFILE = TransformProfile(
+    name="validation_rescue",
+    crop_pct_range=(0.0, 0.0),
+    rotate_abs_max=0.0,
+    fps_jitter_choices=(-0.1, 0.1),
+    speed_range=(0.9998, 1.0002),
+    brightness_range=(-0.003, 0.003),
+    contrast_range=(0.996, 1.006),
+    saturation_range=(0.996, 1.008),
+    gamma_range=(0.997, 1.004),
+    hue_abs_max=0.2,
+    denoise_luma_range=(0.04, 0.12),
+    denoise_chroma_range=(0.04, 0.1),
+    noise_strength_range=(1, 1),
+    unsharp_range=(0.02, 0.08),
+    crf_range=(19, 21),
+)
+
 
 def run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=True, capture_output=True, text=True)
@@ -216,6 +234,12 @@ def even(value: int) -> int:
     return max(2, value - (value % 2))
 
 
+def even_or_zero(value: int) -> int:
+    if value <= 0:
+        return 0
+    return even(value)
+
+
 def hash_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -226,18 +250,21 @@ def hash_file(path: Path) -> str:
 
 def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
     rng = random.Random(seed + attempt * 7919)
-    if attempt <= 2:
+    if attempt == MAX_ATTEMPTS:
+        profile = VALIDATION_RESCUE_PROFILE
+    elif attempt <= 2:
         profile_weights = [0.15, 0.45, 0.40]
+        profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
     elif attempt <= 4:
         profile_weights = [0.30, 0.55, 0.15]
+        profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
     else:
-        profile_weights = [0.75, 0.25, 0.0]
-    profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
+        profile = PROFILES[0]
     crop_pct = rng.uniform(*profile.crop_pct_range)
-    crop_x_total = even(int(info.width * crop_pct))
-    crop_y_total = even(int(info.height * crop_pct))
-    crop_left = even(rng.randint(0, max(0, crop_x_total)))
-    crop_top = even(rng.randint(0, max(0, crop_y_total)))
+    crop_x_total = even_or_zero(int(info.width * crop_pct))
+    crop_y_total = even_or_zero(int(info.height * crop_pct))
+    crop_left = even_or_zero(rng.randint(0, max(0, crop_x_total)))
+    crop_top = even_or_zero(rng.randint(0, max(0, crop_y_total)))
     crop_width = even(info.width - crop_x_total)
     crop_height = even(info.height - crop_y_total)
 
@@ -246,7 +273,11 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
     speed = rng.uniform(*profile.speed_range)
     rotate_degrees = rng.uniform(-profile.rotate_abs_max, profile.rotate_abs_max)
     rotate_radians = abs(math.radians(rotate_degrees))
-    overscan = 1.0 + abs(math.sin(rotate_radians)) + rng.uniform(0.006, 0.018)
+    overscan = (
+        1.0
+        if profile.name == VALIDATION_RESCUE_PROFILE.name
+        else 1.0 + abs(math.sin(rotate_radians)) + rng.uniform(0.006, 0.018)
+    )
     working_width = even(math.ceil(info.width * overscan))
     working_height = even(math.ceil(info.height * overscan))
 
