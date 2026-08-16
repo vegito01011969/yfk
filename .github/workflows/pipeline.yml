@@ -30,6 +30,8 @@ jobs:
       MAX_DOWNLOAD_ATTEMPTS: "15"
       MIN_DOWNLOAD_VIDEOS_FOR_UPLOAD: "2"
       FAIL_ON_NO_SOURCE_DOWNLOADS: "false"
+      PIPELINE_UPLOAD_ATTEMPTS: "3"
+      PIPELINE_REQUIRE_UPLOAD: "true"
       ENABLE_YOUTUBE_UPLOAD: "true"
       YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"
       YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS: "false"
@@ -163,7 +165,7 @@ jobs:
         run: colab --auth="$COLAB_CLI_AUTH" sessions
 
       - name: Run full pipeline
-        run: viral-pipeline run --no-resume
+        run: python scripts/run_pipeline_until_upload.py
 
       - name: Summarize kids pipeline run
         if: always()

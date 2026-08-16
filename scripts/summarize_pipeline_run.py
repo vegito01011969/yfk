@@ -36,6 +36,10 @@ def main() -> None:
     context = _read_json(context_path)
     upload = _read_json(run_dir / "upload" / "youtube_upload.json")
     publish = _read_json(run_dir / "publish" / "publish_manifest.json")
+    upload_metadata = upload.get("metadata") or {}
+    upload_reason = (
+        upload_metadata.get("reason") if isinstance(upload_metadata, dict) else None
+    )
 
     trends = context.get("selected_trends") or []
     trend = trends[0] if trends else {}
@@ -64,8 +68,8 @@ def main() -> None:
         f"- Render path: `{render_path}`",
         f"- Upload status: `{upload.get('status') or 'not reached'}`",
     ]
-    if upload.get("reason"):
-        lines.append(f"- Upload skip reason: `{upload['reason']}`")
+    if upload_reason:
+        lines.append(f"- Upload skip reason: `{upload_reason}`")
     if upload.get("video_id"):
         lines.append(f"- YouTube video ID: `{upload['video_id']}`")
     lines.append("")

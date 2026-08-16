@@ -148,6 +148,7 @@ class Settings(BaseSettings):
     youtube_trend_min_topic_videos: int = 3
     youtube_trend_min_compilation_videos: int = 2
     youtube_trend_lookback_hours: int = 168
+    youtube_focused_search_query_count: int = 3
     youtube_activity_seed_queries: str = ""
     compilation_queries: str = ""
     football_query_adjectives: str = FOOTBALL_QUERY_ADJECTIVES

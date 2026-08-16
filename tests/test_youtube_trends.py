@@ -746,9 +746,9 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
     assert [video.id for video in videos] == ["goal", "save"]
     assert all(video.metadata["search_relevance_score"] >= 0.45 for video in videos)
     assert fake_client.search_queries
-    assert len(fake_client.search_queries) == 1
-    assert fake_client.max_results == [36]
-    assert fake_client.published_after_values == [None]
+    assert len(fake_client.search_queries) == 3
+    assert fake_client.max_results == [36, 36, 36]
+    assert fake_client.published_after_values == [None, None, None]
     assert all("football" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral football moments" in query.lower()
@@ -782,8 +782,8 @@ def test_youtube_short_search_prefers_real_cricket_moments(tmp_path) -> None:
     assert {video.id for video in videos} == {"catch", "six"}
     assert all(video.metadata["search_relevance_score"] >= 0.55 for video in videos)
     assert fake_client.search_queries
-    assert len(fake_client.search_queries) == 1
-    assert fake_client.published_after_values == [None]
+    assert len(fake_client.search_queries) == 3
+    assert fake_client.published_after_values == [None, None, None]
     assert all("cricket" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral cricket moments" in query.lower()

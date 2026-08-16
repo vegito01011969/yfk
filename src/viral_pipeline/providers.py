@@ -1471,7 +1471,8 @@ class YouTubeDataProvider:
             and self.settings.content_domain in {"football", "cricket"}
         )
         if focused_domain:
-            search_queries = search_queries[:1]
+            query_count = max(1, self.settings.youtube_focused_search_query_count)
+            search_queries = search_queries[:query_count]
         quota_limited = False
         for search_query in search_queries:
             # Focused sports domains already rotate a concrete theme each run and only use

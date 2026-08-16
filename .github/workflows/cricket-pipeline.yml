@@ -26,10 +26,14 @@ jobs:
       SOURCE_HISTORY_PATH: data/cricket_source_video_history.json
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
+      MAX_VIDEOS_PER_TREND: "40"
       MAX_DOWNLOAD_VIDEOS: "5"
-      MAX_DOWNLOAD_ATTEMPTS: "30"
+      MAX_DOWNLOAD_ATTEMPTS: "40"
       MIN_DOWNLOAD_VIDEOS_FOR_UPLOAD: "2"
       FAIL_ON_NO_SOURCE_DOWNLOADS: "false"
+      YOUTUBE_FOCUSED_SEARCH_QUERY_COUNT: "4"
+      PIPELINE_UPLOAD_ATTEMPTS: "3"
+      PIPELINE_REQUIRE_UPLOAD: "true"
       ENABLE_YOUTUBE_UPLOAD: "true"
       YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"
       YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS: "false"
@@ -166,7 +170,7 @@ jobs:
         run: colab --auth="$COLAB_CLI_AUTH" sessions
 
       - name: Run cricket pipeline
-        run: viral-pipeline run --no-resume
+        run: python scripts/run_pipeline_until_upload.py
 
       - name: Summarize cricket pipeline run
         if: always()
