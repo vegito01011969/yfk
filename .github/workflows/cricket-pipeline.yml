@@ -168,11 +168,17 @@ jobs:
       - name: Run cricket pipeline
         run: viral-pipeline run --no-resume
 
-      - name: Upload failure diagnostics
-        if: failure()
+      - name: Summarize cricket pipeline run
+        if: always()
+        env:
+          PIPELINE_SUMMARY_LABEL: Cricket Shorts Pipeline
+        run: python scripts/summarize_pipeline_run.py
+
+      - name: Upload cricket pipeline diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cricket-pipeline-failure-${{ github.run_id }}
+          name: cricket-pipeline-diagnostics-${{ github.run_id }}
           path: |
             data/cricket_source_video_history.json
             workdir/runs/**/context.json

@@ -168,11 +168,17 @@ jobs:
       - name: Run football pipeline
         run: viral-pipeline run --no-resume
 
-      - name: Upload failure diagnostics
-        if: failure()
+      - name: Summarize football pipeline run
+        if: always()
+        env:
+          PIPELINE_SUMMARY_LABEL: Football Shorts Pipeline
+        run: python scripts/summarize_pipeline_run.py
+
+      - name: Upload football pipeline diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: football-pipeline-failure-${{ github.run_id }}
+          name: football-pipeline-diagnostics-${{ github.run_id }}
           path: |
             data/football_source_video_history.json
             workdir/runs/**/context.json

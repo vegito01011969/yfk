@@ -184,6 +184,7 @@ class FakeFootballQualityClient:
     def __init__(self) -> None:
         self.search_queries: list[str] = []
         self.max_results: list[int] = []
+        self.published_after_values: list[object | None] = []
 
     def search_videos(
         self,
@@ -198,6 +199,7 @@ class FakeFootballQualityClient:
     ) -> list[dict[str, Any]]:
         self.search_queries.append(query)
         self.max_results.append(max_results)
+        self.published_after_values.append(published_after)
         return [
             {"id": {"videoId": "gameplay"}},
             {"id": {"videoId": "goal"}},
@@ -284,6 +286,7 @@ class FakeFootballQualityClient:
 class FakeCricketQualityClient:
     def __init__(self) -> None:
         self.search_queries: list[str] = []
+        self.published_after_values: list[object | None] = []
 
     def search_videos(
         self,
@@ -297,6 +300,7 @@ class FakeCricketQualityClient:
         relevance_language: str | None = None,
     ) -> list[dict[str, Any]]:
         self.search_queries.append(query)
+        self.published_after_values.append(published_after)
         return [
             {"id": {"videoId": "gameplay"}},
             {"id": {"videoId": "catch"}},
@@ -744,6 +748,7 @@ def test_youtube_short_search_prefers_real_football_moments(tmp_path) -> None:
     assert fake_client.search_queries
     assert len(fake_client.search_queries) == 1
     assert fake_client.max_results == [36]
+    assert fake_client.published_after_values == [None]
     assert all("football" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral football moments" in query.lower()
@@ -778,6 +783,7 @@ def test_youtube_short_search_prefers_real_cricket_moments(tmp_path) -> None:
     assert all(video.metadata["search_relevance_score"] >= 0.55 for video in videos)
     assert fake_client.search_queries
     assert len(fake_client.search_queries) == 1
+    assert fake_client.published_after_values == [None]
     assert all("cricket" in query.lower() for query in fake_client.search_queries)
     assert not any(
         "viral cricket moments" in query.lower()

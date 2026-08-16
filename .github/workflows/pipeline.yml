@@ -165,11 +165,17 @@ jobs:
       - name: Run full pipeline
         run: viral-pipeline run --no-resume
 
-      - name: Upload failure diagnostics
-        if: failure()
+      - name: Summarize kids pipeline run
+        if: always()
+        env:
+          PIPELINE_SUMMARY_LABEL: Kids Shorts Pipeline
+        run: python scripts/summarize_pipeline_run.py
+
+      - name: Upload kids pipeline diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pipeline-failure-${{ github.run_id }}
+          name: kids-pipeline-diagnostics-${{ github.run_id }}
           path: |
             data/source_video_history.json
             workdir/runs/**/context.json

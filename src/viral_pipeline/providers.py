@@ -1474,7 +1474,10 @@ class YouTubeDataProvider:
             search_queries = search_queries[:1]
         quota_limited = False
         for search_query in search_queries:
-            search_windows = (published_after,) if focused_domain else (published_after, None)
+            # Focused sports domains already rotate a concrete theme each run and only use
+            # one expensive search.list call. Avoid constraining that single call to the
+            # recent lookback window, which can leave us with too few downloadable Shorts.
+            search_windows = (None,) if focused_domain else (published_after, None)
             for attempt_published_after in search_windows:
                 try:
                     search_items = self.client.search_videos(
