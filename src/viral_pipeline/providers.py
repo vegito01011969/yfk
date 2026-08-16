@@ -1470,7 +1470,7 @@ class YouTubeDataProvider:
             and self.settings.content_domain in {"football", "cricket"}
         )
         if focused_domain:
-            search_queries = search_queries[:2]
+            search_queries = search_queries[:1]
         quota_limited = False
         for search_query in search_queries:
             search_windows = (published_after,) if focused_domain else (published_after, None)
@@ -1535,48 +1535,6 @@ class YouTubeDataProvider:
                 and len(videos) >= pool_size
             ):
                 break
-        if focused_domain and not quota_limited and len(videos) < max(limit, 8):
-            for search_query in search_queries[:1]:
-                try:
-                    search_items = self.client.search_videos(
-                        query=search_query,
-                        max_results=query_pool_size,
-                        order="relevance",
-                        published_after=None,
-                        region_code=self.settings.youtube_region_code if self.settings else None,
-                        video_duration="short",
-                        relevance_language=language,
-                    )
-                except YouTubeApiError as exc:
-                    if exc.status_code in {403, 429}:
-                        LOGGER.warning(
-                            "YouTube API quota/rate limit during fallback search %r: %s",
-                            search_query,
-                            exc,
-                        )
-                        break
-                    raise
-                video_ids = [
-                    video_id
-                    for video_id in _video_ids_from_search_items(search_items)
-                    if video_id not in seen_search_ids
-                ]
-                seen_search_ids.update(video_ids)
-                try:
-                    video_items = self.client.videos_by_id(video_ids)
-                except YouTubeApiError as exc:
-                    if exc.status_code in {403, 429}:
-                        LOGGER.warning(
-                            "YouTube API quota/rate limit while loading fallback video details: %s",
-                            exc,
-                        )
-                        break
-                    raise
-                for item in video_items:
-                    video = _youtube_video_from_item(item, trend.id)
-                    video.metadata["search_query"] = search_query
-                    video.metadata["search_published_after"] = None
-                    videos.append(video)
         max_seconds = self.settings.max_source_video_seconds if self.settings else 75
         short_videos = [
             video
