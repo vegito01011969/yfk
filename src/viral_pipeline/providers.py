@@ -31,6 +31,15 @@ LOGGER = logging.getLogger(__name__)
 
 YOUTUBE_API_BASE_URL = "https://www.googleapis.com/youtube/v3"
 COMMAND_OUTPUT_SNIPPET_CHARS = 4000
+YOUTUBE_BOT_WALL_MARKERS = (
+    "sign in to confirm you",
+    "not a bot",
+)
+
+
+def _is_youtube_bot_wall_text(text: str) -> bool:
+    haystack = text.lower()
+    return all(marker in haystack for marker in YOUTUBE_BOT_WALL_MARKERS)
 
 STOPWORDS = {
     "about",
@@ -1673,6 +1682,121 @@ class YtDlpVideoDownloadProvider:
 class ColabYtDlpVideoDownloadProvider:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+
+    def download_many(
+        self,
+        videos: list[YouTubeVideo],
+        output_dir: Path,
+        *,
+        max_successes: int,
+    ) -> tuple[list[YouTubeVideo], list[YouTubeVideo]]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if not videos:
+            return [], []
+        session = f"{self.settings.colab_session_prefix}-batch-{uuid4().hex[:8]}"
+        remote_dir = self.settings.colab_remote_dir.rstrip("/")
+        job_path = output_dir / "colab_batch_job.json"
+        result_zip = output_dir / "colab_batch_result.zip"
+        worker_path = Path("scripts/colab_ytdlp_worker.py")
+        extractor_args = [
+            value.strip()
+            for value in (self.settings.yt_dlp_extractor_args or "").splitlines()
+            if value.strip()
+        ]
+        job_path.write_text(
+            json.dumps(
+                {
+                    "videos": [{"id": video.id, "url": video.url} for video in videos],
+                    "max_successes": max_successes,
+                    "format": self.settings.yt_dlp_format,
+                    "js_runtimes": self.settings.yt_dlp_js_runtimes,
+                    "extractor_args": extractor_args,
+                    "verbose": self.settings.yt_dlp_verbose,
+                    "yt_dlp_requirement": self.settings.colab_yt_dlp_requirement,
+                    "download_timeout_seconds": self.settings.yt_dlp_download_timeout_seconds,
+                    "batch_timeout_seconds": self.settings.max_download_stage_seconds,
+                    "enable_browser_po_token": self.settings.colab_enable_browser_po_token,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
+        try:
+            self._run(["new", "-s", session])
+            self._run(
+                ["exec", "-s", session],
+                input_text=(
+                    "import pathlib\n"
+                    f"pathlib.Path('{remote_dir}').mkdir(parents=True, exist_ok=True)\n"
+                ),
+            )
+            self._run(["upload", "-s", session, str(job_path), f"{remote_dir}/job.json"])
+            cookies_path = self.settings.yt_dlp_cookies_path
+            if (
+                self.settings.colab_upload_youtube_cookies
+                and cookies_path
+                and cookies_path.exists()
+            ):
+                self._run(["upload", "-s", session, str(cookies_path), f"{remote_dir}/cookies.txt"])
+            self._run(["exec", "-s", session, "-f", str(worker_path)])
+            self._run(["download", "-s", session, f"{remote_dir}/result.zip", str(result_zip)])
+        finally:
+            try:
+                self._run(["stop", "-s", session])
+            except subprocess.CalledProcessError as exc:
+                LOGGER.warning("Failed to stop Colab session %s: %s", session, exc)
+
+        if not result_zip.exists():
+            raise FileNotFoundError("Colab did not return a batch result archive")
+        with zipfile.ZipFile(result_zip) as archive:
+            archive.extractall(output_dir)
+
+        result_path = output_dir / "result.json"
+        result_payload = (
+            json.loads(result_path.read_text(encoding="utf-8"))
+            if result_path.exists()
+            else {}
+        )
+        result_by_id = {
+            str(item.get("video_id")): item
+            for item in result_payload.get("results", [])
+            if isinstance(item, dict)
+        }
+        downloaded: list[YouTubeVideo] = []
+        failed: list[YouTubeVideo] = []
+        for video in videos:
+            item = result_by_id.get(video.id, {})
+            if not item:
+                continue
+            if item.get("status") == "ok":
+                try:
+                    downloaded_path = self._find_download(video.id, output_dir)
+                except FileNotFoundError:
+                    item = {"status": "download_missing_file"}
+                else:
+                    updated = video.model_copy(deep=True)
+                    updated.downloaded_path = downloaded_path
+                    updated.metadata["download_provider"] = "colab-yt-dlp"
+                    updated.metadata["downloaded_path"] = str(downloaded_path)
+                    updated.metadata["colab_session"] = session
+                    updated.metadata["download_backend"] = "colab_batch"
+                    downloaded.append(updated)
+                    continue
+            failed_video = video.model_copy(deep=True)
+            failed_video.metadata["download_failed"] = True
+            failed_video.metadata["download_error"] = str(item.get("status") or "not_attempted")
+            failed_video.metadata["download_stderr"] = str(item.get("stderr") or "")[-2000:]
+            failed_video.metadata["download_error_kind"] = (
+                "youtube_bot_wall"
+                if _is_youtube_bot_wall_text(
+                    " ".join(str(item.get(key) or "") for key in ("stdout", "stderr"))
+                )
+                else "download_error"
+            )
+            failed.append(failed_video)
+        return downloaded, failed
 
     def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
         output_dir.mkdir(parents=True, exist_ok=True)

@@ -748,43 +748,60 @@ class DownloadVideosStage(PipelineStage):
         max_attempts = self.settings.max_download_attempts or len(context.analyzed_videos)
         download_started_at = time.monotonic()
         max_stage_seconds = max(0, self.settings.max_download_stage_seconds)
-        for video in _dedupe_videos(context.analyzed_videos):
-            if len(downloaded) >= self.settings.max_download_videos:
-                break
-            if attempts >= max_attempts:
-                break
-            if max_stage_seconds and time.monotonic() - download_started_at >= max_stage_seconds:
-                LOGGER.warning(
-                    "Stopping downloads after %s attempt(s); download stage budget of %ss expired",
-                    attempts,
-                    max_stage_seconds,
-                )
-                break
-            attempts += 1
-            try:
-                downloaded.append(self.provider.download(video, download_dir / video.id))
-            except (
-                subprocess.CalledProcessError,
-                subprocess.TimeoutExpired,
-                FileNotFoundError,
-            ) as exc:
-                failed_video = video.model_copy(deep=True)
-                failed_video.metadata["download_failed"] = True
-                failed_video.metadata["download_error"] = str(exc)
-                if isinstance(exc, subprocess.CalledProcessError):
-                    failed_video.metadata["download_stderr"] = _called_process_output(exc)[-2000:]
-                failed_video.metadata["download_error_kind"] = (
-                    "youtube_bot_wall" if _is_youtube_bot_wall(exc) else "download_error"
-                )
-                failed.append(failed_video)
-                output = (
-                    f"\n{_called_process_output(exc)[-1200:]}"
-                    if isinstance(exc, subprocess.CalledProcessError)
-                    and _called_process_output(exc)
-                    else ""
-                )
-                LOGGER.warning("Skipping failed download for %s: %s%s", video.id, exc, output)
-                continue
+        candidates = _dedupe_videos(context.analyzed_videos)
+        batch_download = getattr(self.provider, "download_many", None)
+        if callable(batch_download):
+            batch_candidates = candidates[:max_attempts]
+            downloaded, failed = batch_download(
+                batch_candidates,
+                download_dir,
+                max_successes=self.settings.max_download_videos,
+            )
+            attempts = len(batch_candidates)
+        else:
+            for video in candidates:
+                if len(downloaded) >= self.settings.max_download_videos:
+                    break
+                if attempts >= max_attempts:
+                    break
+                if (
+                    max_stage_seconds
+                    and time.monotonic() - download_started_at >= max_stage_seconds
+                ):
+                    LOGGER.warning(
+                        "Stopping downloads after %s attempt(s); "
+                        "download stage budget of %ss expired",
+                        attempts,
+                        max_stage_seconds,
+                    )
+                    break
+                attempts += 1
+                try:
+                    downloaded.append(self.provider.download(video, download_dir / video.id))
+                except (
+                    subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired,
+                    FileNotFoundError,
+                ) as exc:
+                    failed_video = video.model_copy(deep=True)
+                    failed_video.metadata["download_failed"] = True
+                    failed_video.metadata["download_error"] = str(exc)
+                    if isinstance(exc, subprocess.CalledProcessError):
+                        failed_video.metadata["download_stderr"] = _called_process_output(exc)[
+                            -2000:
+                        ]
+                    failed_video.metadata["download_error_kind"] = (
+                        "youtube_bot_wall" if _is_youtube_bot_wall(exc) else "download_error"
+                    )
+                    failed.append(failed_video)
+                    output = (
+                        f"\n{_called_process_output(exc)[-1200:]}"
+                        if isinstance(exc, subprocess.CalledProcessError)
+                        and _called_process_output(exc)
+                        else ""
+                    )
+                    LOGGER.warning("Skipping failed download for %s: %s%s", video.id, exc, output)
+                    continue
         min_downloads = max(1, self.settings.min_download_videos_for_upload)
         if len(downloaded) < min_downloads:
             if failed:

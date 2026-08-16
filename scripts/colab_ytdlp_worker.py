@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -97,6 +98,85 @@ def _js_runtime_arg(configured: object, deno_path: Path | None) -> str | None:
     return configured_text or None
 
 
+def _download_one(
+    *,
+    video: dict[str, object],
+    job: dict[str, object],
+    downloads_dir: Path,
+    deno_path: Path | None,
+    chrome_path: Path | None,
+    enable_browser_po_token: bool,
+) -> dict[str, object]:
+    video_id = str(video["id"])
+    output_template = downloads_dir / f"{video_id}.%(ext)s"
+    command = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "--no-playlist",
+        "--restrict-filenames",
+        "--write-info-json",
+        "--merge-output-format",
+        "mp4",
+        "-f",
+        str(job["format"]),
+        "-o",
+        str(output_template),
+    ]
+
+    cookies_path = REMOTE_DIR / "cookies.txt"
+    if cookies_path.exists():
+        command.extend(["--cookies", str(cookies_path)])
+    js_runtime_arg = _js_runtime_arg(job.get("js_runtimes"), deno_path)
+    if js_runtime_arg:
+        command.extend(["--js-runtimes", js_runtime_arg])
+    extractor_args_values = job.get("extractor_args") or [
+        "youtube:player_client=mweb,web_safari,web_embedded,tv_simply,android_vr"
+    ]
+    if enable_browser_po_token and chrome_path:
+        extractor_args_values.append(f"youtubepot-wpc:browser_path={chrome_path}")
+    for extractor_args in extractor_args_values:
+        command.extend(["--extractor-args", str(extractor_args)])
+    if job.get("verbose"):
+        command.append("--verbose")
+    command.append(str(video["url"]))
+
+    timeout_seconds = int(job.get("download_timeout_seconds") or 240)
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "video_id": video_id,
+            "status": "download_timeout",
+            "command": command,
+            "timeout_seconds": timeout_seconds,
+            "stdout": str(exc.stdout or "")[-8000:],
+            "stderr": str(exc.stderr or "")[-8000:],
+        }
+
+    if result.returncode != 0:
+        return {
+            "video_id": video_id,
+            "status": "download_failed",
+            "command": command,
+            "returncode": result.returncode,
+            "stdout": result.stdout[-8000:],
+            "stderr": result.stderr[-8000:],
+        }
+
+    return {
+        "video_id": video_id,
+        "status": "ok",
+        "command": command,
+    }
+
+
 def main() -> None:
     job = json.loads(JOB_PATH.read_text(encoding="utf-8"))
     downloads_dir = REMOTE_DIR / "downloads"
@@ -125,78 +205,49 @@ def main() -> None:
 
     deno_path = _install_deno()
     chrome_path = _install_chrome() if enable_browser_po_token else None
-    output_template = downloads_dir / f"{job['video_id']}.%(ext)s"
-    command = [
-        sys.executable,
-        "-m",
-        "yt_dlp",
-        "--no-playlist",
-        "--restrict-filenames",
-        "--write-info-json",
-        "--merge-output-format",
-        "mp4",
-        "-f",
-        job["format"],
-        "-o",
-        str(output_template),
-    ]
+    videos = job.get("videos")
+    if not isinstance(videos, list):
+        videos = [{"id": job["video_id"], "url": job["url"]}]
 
-    cookies_path = REMOTE_DIR / "cookies.txt"
-    if cookies_path.exists():
-        command.extend(["--cookies", str(cookies_path)])
-    js_runtime_arg = _js_runtime_arg(job.get("js_runtimes"), deno_path)
-    if js_runtime_arg:
-        command.extend(["--js-runtimes", js_runtime_arg])
-    extractor_args_values = job.get("extractor_args") or [
-        "youtube:player_client=mweb,web_safari,web_embedded,tv_simply,android_vr"
-    ]
-    if enable_browser_po_token and chrome_path:
-        extractor_args_values.append(f"youtubepot-wpc:browser_path={chrome_path}")
-    for extractor_args in extractor_args_values:
-        command.extend(["--extractor-args", str(extractor_args)])
-    if job.get("verbose"):
-        command.append("--verbose")
-    command.append(job["url"])
-
-    timeout_seconds = int(job.get("download_timeout_seconds") or 240)
-    try:
-        result = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
+    max_successes = int(job.get("max_successes") or len(videos))
+    batch_timeout_seconds = int(job.get("batch_timeout_seconds") or 0)
+    batch_started_at = time.monotonic()
+    results: list[dict[str, object]] = []
+    successes = 0
+    for video in videos:
+        if not isinstance(video, dict):
+            continue
+        if (
+            batch_timeout_seconds
+            and time.monotonic() - batch_started_at >= batch_timeout_seconds
+        ):
+            results.append(
+                {
+                    "status": "batch_timeout",
+                    "timeout_seconds": batch_timeout_seconds,
+                }
+            )
+            break
+        result = _download_one(
+            video=video,
+            job=job,
+            downloads_dir=downloads_dir,
+            deno_path=deno_path,
+            chrome_path=chrome_path,
+            enable_browser_po_token=enable_browser_po_token,
         )
-    except subprocess.TimeoutExpired as exc:
-        _write_result(
-            "download_timeout",
-            command=command,
-            deno_path=str(deno_path) if deno_path else None,
-            chrome_path=str(chrome_path) if chrome_path else None,
-            timeout_seconds=timeout_seconds,
-            stdout=str(exc.stdout or "")[-8000:],
-            stderr=str(exc.stderr or "")[-8000:],
-        )
-        _write_archive(downloads_dir)
-        return
-    if result.returncode != 0:
-        _write_result(
-            "download_failed",
-            command=command,
-            deno_path=str(deno_path) if deno_path else None,
-            chrome_path=str(chrome_path) if chrome_path else None,
-            returncode=result.returncode,
-            stdout=result.stdout[-8000:],
-            stderr=result.stderr[-8000:],
-        )
-        _write_archive(downloads_dir)
-        return
+        results.append(result)
+        if result.get("status") == "ok":
+            successes += 1
+        if successes >= max_successes:
+            break
 
     _write_result(
-        "ok",
-        command=command,
+        "ok" if successes else "download_failed",
         deno_path=str(deno_path) if deno_path else None,
         chrome_path=str(chrome_path) if chrome_path else None,
+        successes=successes,
+        results=results,
     )
     _write_archive(downloads_dir)
 

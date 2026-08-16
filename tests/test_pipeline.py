@@ -467,6 +467,63 @@ def test_download_stage_stops_when_time_budget_expires(tmp_path: Path, monkeypat
     assert context.analyzed_videos == []
 
 
+def test_download_stage_uses_batch_downloader_when_available(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.max_download_videos = 2
+    settings.max_download_attempts = 3
+    settings.min_download_videos_for_upload = 2
+
+    class BatchProvider:
+        calls = 0
+
+        def download_many(
+            self,
+            videos: list[YouTubeVideo],
+            output_dir: Path,
+            *,
+            max_successes: int,
+        ) -> tuple[list[YouTubeVideo], list[YouTubeVideo]]:
+            self.calls += 1
+            assert [video.id for video in videos] == ["video-1", "video-2", "video-3"]
+            assert max_successes == 2
+            downloaded: list[YouTubeVideo] = []
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for video in videos[:2]:
+                path = output_dir / f"{video.id}.mp4"
+                path.write_text("media", encoding="utf-8")
+                updated = video.model_copy(deep=True)
+                updated.downloaded_path = path
+                downloaded.append(updated)
+            failed = videos[2:]
+            return downloaded, failed
+
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            raise AssertionError("single-video download should not be used")
+
+    provider = BatchProvider()
+    context = PipelineContext(
+        run_id="batch-download-test",
+        workdir=tmp_path,
+        selected_trends=[Trend(title="football saves shorts", source="test")],
+        analyzed_videos=[
+            YouTubeVideo(
+                id=f"video-{index}",
+                trend_id="trend-1",
+                title=f"Football short {index}",
+                url=f"https://www.youtube.com/watch?v=video-{index}",
+            )
+            for index in range(1, 5)
+        ],
+    )
+
+    context = DownloadVideosStage(settings, provider).run(context)
+
+    assert provider.calls == 1
+    assert [video.id for video in context.analyzed_videos] == ["video-1", "video-2"]
+    history = SourceHistory(settings.source_history_path)._data()
+    assert history["videos"]["video-3"]["stage"] == "download_failed"
+
+
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 

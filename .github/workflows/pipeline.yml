@@ -47,11 +47,11 @@ jobs:
       YT_DLP_COOKIES_PATH: secrets/youtube_cookies.txt
       YT_DLP_JS_RUNTIMES: node
       YT_DLP_VERBOSE: "false"
-      YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "150"
+      YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "90"
       COLAB_CLI_AUTH: adc
       GOOGLE_APPLICATION_CREDENTIALS: secrets/colab_adc.json
       COLAB_UPLOAD_YOUTUBE_COOKIES: "true"
-      COLAB_COMMAND_TIMEOUT_SECONDS: "240"
+      COLAB_COMMAND_TIMEOUT_SECONDS: "1050"
       COLAB_ENABLE_BROWSER_PO_TOKEN: "false"
 
     steps:
