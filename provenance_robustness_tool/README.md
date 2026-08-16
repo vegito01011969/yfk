@@ -85,7 +85,7 @@ It validates the output for:
 - changed file hash
 - minimum technical-difference score across timing, size, frame-rate, codec, and container characteristics
 
-If validation fails, it retries with a new transform plan. Intermediate files are cleaned automatically.
+If validation fails, it retries with a new transform plan. Later attempts bias toward safer perceptual-close settings so real-world pipeline renders are less likely to fail after aggressive early attempts. Intermediate files are cleaned automatically.
 
 The debug JSON records the selected stress profile, every randomized parameter, every validation attempt, sampled SSIM, duration drift, file-size delta, frame-rate delta, and the technical-difference score. Keep that file with test results if you need reproducibility.
 

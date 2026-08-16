@@ -15,8 +15,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-MAX_ATTEMPTS = 3
-MIN_SSIM_SAMPLE = 0.78
+MAX_ATTEMPTS = 6
+MIN_SSIM_SAMPLE = 0.75
 
 
 @dataclass(frozen=True)
@@ -226,11 +226,13 @@ def hash_file(path: Path) -> str:
 
 def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
     rng = random.Random(seed + attempt * 7919)
-    profile = rng.choices(
-        PROFILES,
-        weights=[0.25, 0.5, 0.25],
-        k=1,
-    )[0]
+    if attempt <= 2:
+        profile_weights = [0.15, 0.45, 0.40]
+    elif attempt <= 4:
+        profile_weights = [0.30, 0.55, 0.15]
+    else:
+        profile_weights = [0.75, 0.25, 0.0]
+    profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
     crop_pct = rng.uniform(*profile.crop_pct_range)
     crop_x_total = even(int(info.width * crop_pct))
     crop_y_total = even(int(info.height * crop_pct))

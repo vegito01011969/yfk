@@ -333,18 +333,28 @@ def _apply_provenance_transform_if_enabled(
     else:
         source_path = input_path
 
-    subprocess.run(
-        [
-            sys.executable,
-            str(script_path),
-            str(source_path),
-            "--output",
-            str(transformed_path),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(script_path),
+                str(source_path),
+                "--output",
+                str(transformed_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        debug_path = transformed_path.with_suffix(transformed_path.suffix + ".debug.json")
+        details = _called_process_output(exc)[-3000:]
+        if debug_path.exists():
+            debug_text = debug_path.read_text(encoding="utf-8")[-3000:]
+            details = f"{details}\nTransform debug:\n{debug_text}"
+        raise RuntimeError(
+            f"Provenance transform failed for {source_path}. {details}"
+        ) from exc
     return transformed_path
 
 
