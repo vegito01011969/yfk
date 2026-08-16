@@ -170,6 +170,7 @@ class Settings(BaseSettings):
     yt_dlp_js_runtimes: str | None = None
     yt_dlp_extractor_args: str | None = None
     yt_dlp_verbose: bool = False
+    yt_dlp_download_timeout_seconds: int = 240
     colab_cli_auth: str = "adc"
     colab_cli_config_path: Path | None = None
     colab_session_prefix: str = "viral-pipeline"
@@ -189,6 +190,7 @@ class Settings(BaseSettings):
     render_outro_seconds: float = 2.5
     enable_voiceover: bool = False
     local_tts_voice: str = "Samantha"
+    max_download_stage_seconds: int = 0
 
     @model_validator(mode="after")
     def apply_domain_defaults(self) -> Settings:

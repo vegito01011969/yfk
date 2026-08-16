@@ -1641,6 +1641,7 @@ class YtDlpVideoDownloadProvider:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=self.settings.yt_dlp_download_timeout_seconds,
             )
         except subprocess.CalledProcessError as exc:
             output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
@@ -1695,6 +1696,7 @@ class ColabYtDlpVideoDownloadProvider:
                     "extractor_args": extractor_args,
                     "verbose": self.settings.yt_dlp_verbose,
                     "yt_dlp_requirement": self.settings.colab_yt_dlp_requirement,
+                    "download_timeout_seconds": self.settings.yt_dlp_download_timeout_seconds,
                 },
                 indent=2,
                 sort_keys=True,
@@ -1766,6 +1768,19 @@ class ColabYtDlpVideoDownloadProvider:
                     " ".join(command),
                     output[-COMMAND_OUTPUT_SNIPPET_CHARS:],
                 )
+            raise
+        except subprocess.TimeoutExpired as exc:
+            output = "\n".join(
+                str(part)
+                for part in (exc.stdout, exc.stderr)
+                if part
+            )
+            LOGGER.warning(
+                "Colab command timed out after %ss (%s):\n%s",
+                self.settings.colab_command_timeout_seconds,
+                " ".join(command),
+                output[-COMMAND_OUTPUT_SNIPPET_CHARS:],
+            )
             raise
 
     def _find_download(self, video_id: str, output_dir: Path) -> Path:

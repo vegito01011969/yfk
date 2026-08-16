@@ -163,8 +163,10 @@ def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch
         check: bool,
         capture_output: bool,
         text: bool,
+        timeout: int,
     ) -> None:
         commands.append(command)
+        assert timeout == settings.yt_dlp_download_timeout_seconds
         output_dir = tmp_path / "downloads"
         (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
 
@@ -205,8 +207,10 @@ def test_ytdlp_download_supports_multiple_extractor_args(tmp_path: Path, monkeyp
         check: bool,
         capture_output: bool,
         text: bool,
+        timeout: int,
     ) -> None:
         commands.append(command)
+        assert timeout == settings.yt_dlp_download_timeout_seconds
         output_dir = tmp_path / "downloads"
         (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
 
@@ -239,8 +243,10 @@ def test_ytdlp_download_can_enable_verbose_output(tmp_path: Path, monkeypatch) -
         check: bool,
         capture_output: bool,
         text: bool,
+        timeout: int,
     ) -> None:
         commands.append(command)
+        assert timeout == settings.yt_dlp_download_timeout_seconds
         output_dir = tmp_path / "downloads"
         (output_dir / "video-1.mp4").write_text("media", encoding="utf-8")
 
@@ -420,6 +426,45 @@ def test_download_stage_skips_when_below_minimum_downloads(tmp_path: Path) -> No
     history = SourceHistory(settings.source_history_path)._data()
     assert history["videos"]["video-1"]["stage"] == "downloaded_below_publish_minimum"
     assert history["videos"]["video-2"]["stage"] == "download_failed"
+
+
+def test_download_stage_stops_when_time_budget_expires(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.max_download_videos = 5
+    settings.min_download_videos_for_upload = 2
+    settings.fail_on_no_source_downloads = False
+    settings.max_download_stage_seconds = 1
+
+    class SlowFailProvider:
+        attempts = 0
+
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            self.attempts += 1
+            raise FileNotFoundError(video.id)
+
+    provider = SlowFailProvider()
+    times = iter([0.0, 0.0, 2.0])
+    monkeypatch.setattr("viral_pipeline.stages.time.monotonic", lambda: next(times))
+
+    context = PipelineContext(
+        run_id="download-budget-test",
+        workdir=tmp_path,
+        selected_trends=[Trend(title="cricket catches shorts", source="test")],
+        analyzed_videos=[
+            YouTubeVideo(
+                id=f"video-{index}",
+                trend_id="trend-1",
+                title=f"Cricket short {index}",
+                url=f"https://www.youtube.com/watch?v=video-{index}",
+            )
+            for index in range(1, 4)
+        ],
+    )
+
+    context = DownloadVideosStage(settings, provider).run(context)
+
+    assert provider.attempts == 1
+    assert context.analyzed_videos == []
 
 
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:

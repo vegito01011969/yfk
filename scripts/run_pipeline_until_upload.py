@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 from pathlib import Path
 
@@ -28,16 +29,32 @@ def _upload_status(context: dict) -> tuple[str | None, str | None]:
 def main() -> None:
     attempts = max(1, int(os.environ.get("PIPELINE_UPLOAD_ATTEMPTS", "3")))
     require_upload = os.environ.get("PIPELINE_REQUIRE_UPLOAD", "false").lower() == "true"
+    attempt_timeout = max(60, int(os.environ.get("PIPELINE_ATTEMPT_TIMEOUT_SECONDS", "1800")))
     last_return_code = 0
     last_status: str | None = None
     last_reason: str | None = None
 
     for attempt in range(1, attempts + 1):
+        attempt_reason: str | None = None
         print(f"Pipeline attempt {attempt}/{attempts}")
-        completed = subprocess.run(["viral-pipeline", "run", "--no-resume"], check=False)
-        last_return_code = completed.returncode
+        process = subprocess.Popen(
+            ["viral-pipeline", "run", "--no-resume"],
+            start_new_session=True,
+        )
+        try:
+            last_return_code = process.wait(timeout=attempt_timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+            last_return_code = 124
+            attempt_reason = f"Pipeline attempt exceeded {attempt_timeout}s"
         context = _latest_context()
-        last_status, last_reason = _upload_status(context)
+        last_status, context_reason = _upload_status(context)
+        last_reason = attempt_reason or context_reason
         print(f"Pipeline attempt {attempt} exit={last_return_code} upload_status={last_status}")
         if last_reason:
             print(f"Upload skip reason: {last_reason}")

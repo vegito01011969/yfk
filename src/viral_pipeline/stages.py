@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
@@ -745,10 +746,19 @@ class DownloadVideosStage(PipelineStage):
         language = str(selected_language) if selected_language else None
         attempts = 0
         max_attempts = self.settings.max_download_attempts or len(context.analyzed_videos)
+        download_started_at = time.monotonic()
+        max_stage_seconds = max(0, self.settings.max_download_stage_seconds)
         for video in _dedupe_videos(context.analyzed_videos):
             if len(downloaded) >= self.settings.max_download_videos:
                 break
             if attempts >= max_attempts:
+                break
+            if max_stage_seconds and time.monotonic() - download_started_at >= max_stage_seconds:
+                LOGGER.warning(
+                    "Stopping downloads after %s attempt(s); download stage budget of %ss expired",
+                    attempts,
+                    max_stage_seconds,
+                )
                 break
             attempts += 1
             try:

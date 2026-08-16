@@ -154,7 +154,27 @@ def main() -> None:
         command.append("--verbose")
     command.append(job["url"])
 
-    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    timeout_seconds = int(job.get("download_timeout_seconds") or 240)
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        _write_result(
+            "download_timeout",
+            command=command,
+            deno_path=str(deno_path) if deno_path else None,
+            chrome_path=str(chrome_path) if chrome_path else None,
+            timeout_seconds=timeout_seconds,
+            stdout=str(exc.stdout or "")[-8000:],
+            stderr=str(exc.stderr or "")[-8000:],
+        )
+        _write_archive(downloads_dir)
+        return
     if result.returncode != 0:
         _write_result(
             "download_failed",
