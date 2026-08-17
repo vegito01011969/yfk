@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import subprocess
+import zipfile
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -273,6 +275,68 @@ def test_build_providers_can_select_colab_download_backend(tmp_path: Path) -> No
     providers = build_providers(settings)
 
     assert isinstance(providers[2], ColabYtDlpVideoDownloadProvider)
+
+
+def test_colab_batch_download_starts_worker_asynchronously(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "colab"
+    settings.max_download_stage_seconds = 60
+    provider = ColabYtDlpVideoDownloadProvider(settings)
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr("viral_pipeline.providers.time.sleep", lambda seconds: None)
+
+    def fake_run(
+        args: list[str],
+        input_text: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ["exec", "-s"] and input_text and "RESULT_READY=" in input_text:
+            return subprocess.CompletedProcess(args, 0, stdout="RESULT_READY=True\n")
+        if args[:2] == ["download", "-s"]:
+            result_zip = tmp_path / "downloads" / "colab_batch_result.zip"
+            result_zip.parent.mkdir(parents=True, exist_ok=True)
+            result_json = tmp_path / "result.json"
+            result_json.write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "successes": 1,
+                        "results": [{"video_id": "video-1", "status": "ok"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            media_path = tmp_path / "video-1.mp4"
+            media_path.write_text("media", encoding="utf-8")
+            with zipfile.ZipFile(result_zip, "w") as archive:
+                archive.write(result_json, "result.json")
+                archive.write(media_path, "video-1.mp4")
+        return subprocess.CompletedProcess(args, 0, stdout="worker_started\n")
+
+    monkeypatch.setattr(provider, "_run", fake_run)
+
+    downloaded, failed = provider.download_many(
+        [
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Cricket short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+        tmp_path / "downloads",
+        max_successes=1,
+    )
+
+    assert [video.id for video in downloaded] == ["video-1"]
+    assert failed == []
+    assert any(call[0] == "upload" and call[-1].endswith("/worker.py") for call in calls)
+    assert not any(call[:1] == ["exec"] and "-f" in call for call in calls)
 
 
 def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:

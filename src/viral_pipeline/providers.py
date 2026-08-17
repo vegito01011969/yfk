@@ -7,6 +7,7 @@ import random
 import re
 import subprocess
 import sys
+import time
 import unicodedata
 import zipfile
 from collections import Counter, defaultdict
@@ -1740,8 +1741,11 @@ class ColabYtDlpVideoDownloadProvider:
                 and cookies_path.exists()
             ):
                 self._run(["upload", "-s", session, str(cookies_path), f"{remote_dir}/cookies.txt"])
-            self._run(["exec", "-s", session, "-f", str(worker_path)])
-            self._run(["download", "-s", session, f"{remote_dir}/result.zip", str(result_zip)])
+            self._run(["upload", "-s", session, str(worker_path), f"{remote_dir}/worker.py"])
+            self._start_remote_worker(session, remote_dir)
+            result_ready = self._wait_for_remote_result(session, remote_dir)
+            if result_ready:
+                self._run(["download", "-s", session, f"{remote_dir}/result.zip", str(result_zip)])
         finally:
             try:
                 self._run(["stop", "-s", session])
@@ -1749,7 +1753,14 @@ class ColabYtDlpVideoDownloadProvider:
                 LOGGER.warning("Failed to stop Colab session %s: %s", session, exc)
 
         if not result_zip.exists():
-            raise FileNotFoundError("Colab did not return a batch result archive")
+            failed: list[YouTubeVideo] = []
+            for video in videos:
+                failed_video = video.model_copy(deep=True)
+                failed_video.metadata["download_failed"] = True
+                failed_video.metadata["download_error"] = "colab_batch_result_timeout"
+                failed_video.metadata["download_error_kind"] = "download_error"
+                failed.append(failed_video)
+            return [], failed
         with zipfile.ZipFile(result_zip) as archive:
             archive.extractall(output_dir)
 
@@ -1797,6 +1808,46 @@ class ColabYtDlpVideoDownloadProvider:
             )
             failed.append(failed_video)
         return downloaded, failed
+
+    def _start_remote_worker(self, session: str, remote_dir: str) -> None:
+        self._run(
+            ["exec", "-s", session],
+            input_text=(
+                "import pathlib, subprocess, sys\n"
+                f"remote_dir = pathlib.Path({remote_dir!r})\n"
+                "log = open(remote_dir / 'worker.log', 'w', encoding='utf-8')\n"
+                "subprocess.Popen(\n"
+                "    [sys.executable, str(remote_dir / 'worker.py')],\n"
+                "    stdout=log,\n"
+                "    stderr=subprocess.STDOUT,\n"
+                "    start_new_session=True,\n"
+                ")\n"
+                "print('worker_started')\n"
+            ),
+        )
+
+    def _wait_for_remote_result(self, session: str, remote_dir: str) -> bool:
+        timeout_seconds = self.settings.max_download_stage_seconds or (
+            self.settings.yt_dlp_download_timeout_seconds * self.settings.max_download_attempts
+        )
+        timeout_seconds = max(60, timeout_seconds)
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            time.sleep(20)
+            result = self._run(
+                ["exec", "-s", session],
+                input_text=(
+                    "from pathlib import Path\n"
+                    f"print('RESULT_READY=' + str(Path({remote_dir!r}, 'result.zip').exists()))\n"
+                ),
+            )
+            if "RESULT_READY=True" in result.stdout:
+                return True
+        LOGGER.warning(
+            "Colab batch worker did not produce result.zip within %ss",
+            timeout_seconds,
+        )
+        return False
 
     def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
         output_dir.mkdir(parents=True, exist_ok=True)
