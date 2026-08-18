@@ -66,14 +66,16 @@ The tool automatically inspects the input and builds a randomized transform plan
 
 - small crop and resize back to the original dimensions
 - slight working-resolution overscan followed by micro-rotation and center crop
+- randomized scaler kernels, sub-pixel translation, and a second resize pass
 - slight brightness, contrast, saturation, and gamma adjustment
 - tiny hue adjustment
+- subtle RGB channel mixing, chroma-plane shifts, and debanding
 - mild denoise, temporal grain mixing, synthetic noise, and sharpening changes
 - small frame-rate and timing normalization
-- audio high/low-pass normalization, subtle compression, slight EQ, high-quality resampling, small volume adjustment, and synchronized tempo matching
+- audio high/low-pass normalization, subtle compression, slight EQ, high-quality resampling with randomized dithering, small volume adjustment, and synchronized tempo matching
 - metadata/chapter stripping
-- H.264/AAC encoding with randomized sane encoder settings, GOP structure, reference frames, B-frames, and adaptive quantization
-- MP4 output with fast-start layout, varied video track timescale, and randomized muxer flags
+- H.264/AAC encoding with randomized sane encoder settings, GOP structure, reference frames, B-frames, adaptive quantization, profile/level, tune, deblock, trellis, lookahead, and psycho-visual parameters
+- MP4 output with fast-start layout, varied video track timescale, randomized muxer flags, and optional reserved metadata padding
 
 It validates the output for:
 

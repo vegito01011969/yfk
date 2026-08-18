@@ -43,13 +43,29 @@ class TransformPlan:
     output_height: int
     working_width: int
     working_height: int
+    scale_flags_primary: str
+    scale_flags_final: str
     rotate_degrees: float
+    translate_x: float
+    translate_y: float
     fps: float
     brightness: float
     contrast: float
     saturation: float
     gamma: float
     hue_degrees: float
+    channel_rr: float
+    channel_gg: float
+    channel_bb: float
+    channel_rg: float
+    channel_gb: float
+    channel_br: float
+    chroma_shift_cb_h: int
+    chroma_shift_cb_v: int
+    chroma_shift_cr_h: int
+    chroma_shift_cr_v: int
+    gradfun_strength: float
+    gradfun_radius: int
     denoise_luma: float
     denoise_chroma: float
     noise_strength: int
@@ -65,14 +81,25 @@ class TransformPlan:
     audio_eq_gain_db: float
     crf: int
     preset: str
+    tune: str | None
+    x264_profile: str
+    x264_level: str
     video_bitrate: str | None
     audio_bitrate: str
+    audio_dither_method: str
     gop: int
     bframes: int
     refs: int
     aq_strength: float
+    deblock_alpha: int
+    deblock_beta: int
+    psy_rd: float
+    psy_trellis: float
+    trellis: int
+    rc_lookahead: int
     video_track_timescale: int
     movflags: str
+    metadata_padding_bytes: int
 
 
 @dataclass(frozen=True)
@@ -293,13 +320,29 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
         output_height=even(info.height),
         working_width=working_width,
         working_height=working_height,
+        scale_flags_primary=rng.choice(["lanczos", "bicubic", "spline", "area"]),
+        scale_flags_final=rng.choice(["lanczos+accurate_rnd", "bicubic+accurate_rnd", "spline"]),
         rotate_degrees=rotate_degrees,
+        translate_x=rng.uniform(-0.45, 0.45),
+        translate_y=rng.uniform(-0.45, 0.45),
         fps=target_fps,
         brightness=rng.uniform(*profile.brightness_range),
         contrast=rng.uniform(*profile.contrast_range),
         saturation=rng.uniform(*profile.saturation_range),
         gamma=rng.uniform(*profile.gamma_range),
         hue_degrees=rng.uniform(-profile.hue_abs_max, profile.hue_abs_max),
+        channel_rr=rng.uniform(0.997, 1.004),
+        channel_gg=rng.uniform(0.997, 1.004),
+        channel_bb=rng.uniform(0.997, 1.004),
+        channel_rg=rng.uniform(-0.0025, 0.0025),
+        channel_gb=rng.uniform(-0.0025, 0.0025),
+        channel_br=rng.uniform(-0.0025, 0.0025),
+        chroma_shift_cb_h=rng.choice([-1, 0, 0, 0, 1]),
+        chroma_shift_cb_v=rng.choice([-1, 0, 0, 0, 1]),
+        chroma_shift_cr_h=rng.choice([-1, 0, 0, 0, 1]),
+        chroma_shift_cr_v=rng.choice([-1, 0, 0, 0, 1]),
+        gradfun_strength=rng.uniform(0.55, 0.9),
+        gradfun_radius=rng.choice([8, 12, 16]),
         denoise_luma=rng.uniform(*profile.denoise_luma_range),
         denoise_chroma=rng.uniform(*profile.denoise_chroma_range),
         noise_strength=rng.randint(*profile.noise_strength_range),
@@ -315,14 +358,25 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
         audio_eq_gain_db=rng.uniform(-0.9, 0.9),
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
+        tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
+        x264_profile=rng.choice(["main", "high"]),
+        x264_level=rng.choice(["4.0", "4.1", "4.2", "5.0"]),
         video_bitrate=None,
         audio_bitrate=rng.choice(["128k", "160k", "192k"]),
+        audio_dither_method=rng.choice(["triangular", "triangular_hp", "lipshitz", "shibata"]),
         gop=max(24, int(target_fps * rng.uniform(1.7, 3.5))),
         bframes=rng.randint(2, 5),
         refs=rng.randint(2, 5),
         aq_strength=rng.uniform(0.75, 1.15),
+        deblock_alpha=rng.randint(-2, 2),
+        deblock_beta=rng.randint(-2, 2),
+        psy_rd=rng.uniform(0.82, 1.18),
+        psy_trellis=rng.uniform(0.02, 0.18),
+        trellis=rng.randint(1, 2),
+        rc_lookahead=rng.randint(24, 60),
         video_track_timescale=rng.choice([24000, 30000, 60000, 90000]),
         movflags=rng.choice(["+faststart", "+faststart+use_metadata_tags"]),
+        metadata_padding_bytes=rng.choice([0, 4096, 8192, 16384]),
     )
 
 
@@ -331,24 +385,53 @@ def video_filter(plan: TransformPlan) -> str:
         f"crop={plan.crop_width}:{plan.crop_height}:{plan.crop_left}:{plan.crop_top}",
         (
             f"scale={plan.working_width}:{plan.working_height}:"
-            "flags=lanczos:force_original_aspect_ratio=decrease"
+            f"flags={plan.scale_flags_primary}:force_original_aspect_ratio=decrease"
         ),
         (
             f"pad={plan.working_width}:{plan.working_height}:"
             "(ow-iw)/2:(oh-ih)/2:color=black"
         ),
         f"rotate={math.radians(plan.rotate_degrees):.8f}:fillcolor=black",
-        f"crop={plan.output_width}:{plan.output_height}:(iw-ow)/2:(ih-oh)/2",
+        (
+            f"crop={plan.output_width}:{plan.output_height}:"
+            f"(iw-ow)/2+{plan.translate_x:.5f}:(ih-oh)/2+{plan.translate_y:.5f}"
+        ),
+        (
+            f"scale={plan.output_width}:{plan.output_height}:"
+            f"flags={plan.scale_flags_final}"
+        ),
         (
             f"eq=brightness={plan.brightness:.5f}:contrast={plan.contrast:.5f}:"
             f"saturation={plan.saturation:.5f}:gamma={plan.gamma:.5f}"
         ),
         f"hue=h={plan.hue_degrees:.5f}",
         (
+            f"colorchannelmixer=rr={plan.channel_rr:.5f}:gg={plan.channel_gg:.5f}:"
+            f"bb={plan.channel_bb:.5f}:rg={plan.channel_rg:.5f}:"
+            f"gb={plan.channel_gb:.5f}:br={plan.channel_br:.5f}"
+        ),
+        (
             f"hqdn3d={plan.denoise_luma:.3f}:{plan.denoise_chroma:.3f}:"
             f"{plan.denoise_luma * 1.8:.3f}:{plan.denoise_chroma * 1.8:.3f}"
         ),
     ]
+    if any(
+        value
+        for value in (
+            plan.chroma_shift_cb_h,
+            plan.chroma_shift_cb_v,
+            plan.chroma_shift_cr_h,
+            plan.chroma_shift_cr_v,
+        )
+    ):
+        filters.append(
+            "chromashift="
+            f"cbh={plan.chroma_shift_cb_h}:cbv={plan.chroma_shift_cb_v}:"
+            f"crh={plan.chroma_shift_cr_h}:crv={plan.chroma_shift_cr_v}"
+        )
+    filters.append(
+        f"gradfun=strength={plan.gradfun_strength:.3f}:radius={plan.gradfun_radius}"
+    )
     if plan.grain_mix_frames > 1:
         weights = " ".join("1" for _ in range(plan.grain_mix_frames))
         filters.append(f"tmix=frames={plan.grain_mix_frames}:weights='{weights}'")
@@ -380,7 +463,10 @@ def audio_filter(plan: TransformPlan) -> str:
                 f"equalizer=f={plan.audio_eq_frequency_hz}:"
                 f"width_type=o:width=1.2:g={plan.audio_eq_gain_db:.3f}"
             ),
-            "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20",
+            (
+                "aresample=48000:async=1:first_pts=0:resampler=soxr:"
+                f"precision=20:dither_method={plan.audio_dither_method}"
+            ),
             f"volume={plan.audio_volume_db:.3f}dB",
             f"atempo={plan.speed:.8f}",
         ]
@@ -416,6 +502,10 @@ def transform_once(
             "libx264",
             "-preset",
             plan.preset,
+            "-profile:v",
+            plan.x264_profile,
+            "-level:v",
+            plan.x264_level,
             "-crf",
             str(plan.crf),
             "-g",
@@ -429,11 +519,19 @@ def transform_once(
             "-sc_threshold",
             "0",
             "-x264-params",
-            f"aq-mode=3:aq-strength={plan.aq_strength:.3f}:psy-rd=1.00,0.10",
+            (
+                f"aq-mode=3:aq-strength={plan.aq_strength:.3f}:"
+                f"psy-rd={plan.psy_rd:.3f},{plan.psy_trellis:.3f}:"
+                f"deblock={plan.deblock_alpha},{plan.deblock_beta}:"
+                f"trellis={plan.trellis}:rc-lookahead={plan.rc_lookahead}:"
+                "me=umh:subme=8:direct=auto"
+            ),
             "-pix_fmt",
             "yuv420p",
         ]
     )
+    if plan.tune:
+        command.extend(["-tune", plan.tune])
     if info.has_audio:
         command.extend(
             [
@@ -453,11 +551,15 @@ def transform_once(
             str(plan.video_track_timescale),
             "-avoid_negative_ts",
             "make_zero",
+            "-metadata",
+            f"encoder=Lavf-{plan.seed:x}-{plan.attempt}",
             "-movflags",
             plan.movflags,
-            str(output_path),
         ]
     )
+    if plan.metadata_padding_bytes:
+        command.extend(["-moov_size", str(plan.metadata_padding_bytes)])
+    command.append(str(output_path))
     run(command)
 
 
