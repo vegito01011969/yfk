@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -251,6 +252,16 @@ def _concat_file_line(path: Path) -> str:
     return f"file '{escaped}'\n"
 
 
+def _run_render_command(command: list[str], settings: Settings) -> None:
+    subprocess.run(
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=settings.render_command_timeout_seconds,
+    )
+
+
 def _render_final_video(context: PipelineContext, settings: Settings, render_dir: Path) -> Path:
     if context.script is None:
         raise ValueError("Cannot render final video before script generation")
@@ -285,7 +296,7 @@ def _render_final_video(context: PipelineContext, settings: Settings, render_dir
         encoding="utf-8",
     )
     stitched_path = render_dir / "stitched_video.mp4"
-    subprocess.run(
+    _run_render_command(
         [
             "ffmpeg",
             "-y",
@@ -299,15 +310,13 @@ def _render_final_video(context: PipelineContext, settings: Settings, render_dir
             "copy",
             str(stitched_path),
         ],
-        check=True,
-        capture_output=True,
-        text=True,
+        settings,
     )
 
     final_path = render_dir / "final_video.mp4"
     voiceover_suffixes = {".mp3", ".wav", ".m4a", ".aiff"}
     if context.voiceover and context.voiceover.path.suffix.lower() in voiceover_suffixes:
-        _mux_voiceover(stitched_path, context.voiceover.path, final_path)
+        _mux_voiceover(stitched_path, context.voiceover.path, final_path, settings)
     else:
         stitched_path.replace(final_path)
     return _apply_provenance_transform_if_enabled(final_path, settings, render_dir)
@@ -346,13 +355,32 @@ def _apply_provenance_transform_if_enabled(
             check=True,
             capture_output=True,
             text=True,
+            timeout=settings.provenance_transform_timeout_seconds,
         )
-    except subprocess.CalledProcessError as exc:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         debug_path = transformed_path.with_suffix(transformed_path.suffix + ".debug.json")
-        details = _called_process_output(exc)[-3000:]
+        details = (
+            _called_process_output(exc)[-3000:]
+            if isinstance(exc, subprocess.CalledProcessError)
+            else str(exc)
+        )
         if debug_path.exists():
             debug_text = debug_path.read_text(encoding="utf-8")[-3000:]
             details = f"{details}\nTransform debug:\n{debug_text}"
+        if settings.provenance_transform_fail_open:
+            shutil.copy2(source_path, transformed_path)
+            fallback_debug = {
+                "status": "provenance_transform_failed_open",
+                "error": details,
+                "source_path": str(source_path),
+                "output_path": str(transformed_path),
+            }
+            debug_path.write_text(json.dumps(fallback_debug, indent=2), encoding="utf-8")
+            LOGGER.warning(
+                "Provenance transform failed; using pre-provenance render: %s",
+                details[-1000:],
+            )
+            return transformed_path
         raise RuntimeError(
             f"Provenance transform failed for {source_path}. {details}"
         ) from exc
@@ -383,7 +411,7 @@ def _render_numbered_compilation(
         encoding="utf-8",
     )
     final_path = render_dir / "final_video.mp4"
-    subprocess.run(
+    _run_render_command(
         [
             "ffmpeg",
             "-y",
@@ -399,9 +427,7 @@ def _render_numbered_compilation(
             "+faststart",
             str(final_path),
         ],
-        check=True,
-        capture_output=True,
-        text=True,
+        settings,
     )
     return final_path
 
@@ -412,7 +438,7 @@ def _render_title_card(destination: Path, settings: Settings, clip_count: int) -
         f"drawtext=text='{title}':fontcolor=white:fontsize=78:"
         "borderw=6:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2"
     )
-    subprocess.run(
+    _run_render_command(
         [
             "ffmpeg",
             "-y",
@@ -452,9 +478,7 @@ def _render_title_card(destination: Path, settings: Settings, clip_count: int) -
             "+faststart",
             str(destination),
         ],
-        check=True,
-        capture_output=True,
-        text=True,
+        settings,
     )
 
 
@@ -478,7 +502,7 @@ def _normalize_numbered_clip_for_render(
         "borderw=8:bordercolor=black:x=(w-text_w)/2:y=52"
     )
     if has_audio:
-        subprocess.run(
+        _run_render_command(
             [
                 "ffmpeg",
                 "-y",
@@ -511,13 +535,11 @@ def _normalize_numbered_clip_for_render(
                 "+faststart",
                 str(destination),
             ],
-            check=True,
-            capture_output=True,
-            text=True,
+            settings,
         )
         return
 
-    subprocess.run(
+    _run_render_command(
         [
             "ffmpeg",
             "-y",
@@ -552,9 +574,7 @@ def _normalize_numbered_clip_for_render(
             "+faststart",
             str(destination),
         ],
-        check=True,
-        capture_output=True,
-        text=True,
+        settings,
     )
 
 
@@ -612,11 +632,16 @@ def _normalize_clip_for_render(source: Path | None, destination: Path, settings:
             str(destination),
         ]
     )
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    _run_render_command(command, settings)
 
 
-def _mux_voiceover(video_path: Path, voiceover_path: Path, destination: Path) -> None:
-    subprocess.run(
+def _mux_voiceover(
+    video_path: Path,
+    voiceover_path: Path,
+    destination: Path,
+    settings: Settings,
+) -> None:
+    _run_render_command(
         [
             "ffmpeg",
             "-y",
@@ -639,9 +664,7 @@ def _mux_voiceover(video_path: Path, voiceover_path: Path, destination: Path) ->
             "+faststart",
             str(destination),
         ],
-        check=True,
-        capture_output=True,
-        text=True,
+        settings,
     )
 
 

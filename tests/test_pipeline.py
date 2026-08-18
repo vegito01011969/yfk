@@ -35,6 +35,7 @@ from viral_pipeline.stages import (
     PreparePublishStage,
     RankEventsStage,
     UploadYouTubeStage,
+    _apply_provenance_transform_if_enabled,
     _clip_hash_distance,
     _require_expected_upload_channel_for_domain,
     _validate_expected_upload_channel,
@@ -147,6 +148,32 @@ def test_ffmpeg_extractor_builds_segments_from_scene_boundaries(tmp_path: Path) 
         (10.0, 28.0, "scene_boundary"),
         (28.0, 45.0, "scene_boundary"),
     ]
+
+
+def test_provenance_transform_timeout_fails_open(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.apply_provenance_transform = True
+    settings.provenance_transform_fail_open = True
+    settings.provenance_transform_timeout_seconds = 1
+    script_path = tmp_path / "transform.py"
+    script_path.write_text("print('unused')\n", encoding="utf-8")
+    settings.provenance_transform_script = script_path
+    render_dir = tmp_path / "render"
+    render_dir.mkdir()
+    input_path = render_dir / "final_video.mp4"
+    input_path.write_text("pre-transform-media", encoding="utf-8")
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))
+
+    monkeypatch.setattr("viral_pipeline.stages.subprocess.run", fake_run)
+
+    output_path = _apply_provenance_transform_if_enabled(input_path, settings, render_dir)
+
+    assert output_path == render_dir / "final_video.mp4"
+    assert output_path.read_text(encoding="utf-8") == "pre-transform-media"
+    debug = json.loads((render_dir / "final_video.mp4.debug.json").read_text())
+    assert debug["status"] == "provenance_transform_failed_open"
 
 
 def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch) -> None:

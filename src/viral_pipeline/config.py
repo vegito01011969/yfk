@@ -183,7 +183,10 @@ class Settings(BaseSettings):
     render_height: int = 1920
     render_fps: int = 30
     render_mode: str = "plain_compilation"
+    render_command_timeout_seconds: int = 300
     apply_provenance_transform: bool = True
+    provenance_transform_timeout_seconds: int = 600
+    provenance_transform_fail_open: bool = True
     provenance_transform_script: Path = Field(
         default=Path("provenance_robustness_tool/transform.py")
     )
