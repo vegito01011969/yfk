@@ -123,6 +123,22 @@ class TransformPlan:
     audio_hum_amplitude: float
     audio_tone_frequency_hz: int
     audio_tone_amplitude: float
+    audio_fft_noise_reduction: float
+    audio_fft_noise_floor: float
+    audio_phase_shift: float
+    audio_phase_order: int
+    audio_tilt_frequency_hz: int
+    audio_tilt_slope: float
+    audio_crystalizer_intensity: float
+    audio_extra_stereo_mult: float
+    audio_phaser_delay_ms: float
+    audio_phaser_decay: float
+    audio_phaser_speed: float
+    audio_flanger_enabled: bool
+    audio_flanger_delay_ms: float
+    audio_flanger_depth_ms: float
+    audio_flanger_width: float
+    audio_flanger_speed: float
     crf: int
     preset: str
     tune: str | None
@@ -522,6 +538,21 @@ def build_plan(
                 "severity": "low",
             }
         )
+        operations.append(
+            {
+                "category": "audio",
+                "name": "phase_fft_tilt_stereo_spectral_processing",
+                "severity": "medium",
+            }
+        )
+    if stress_level >= 4:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "optional_phaser_flanger_modulation",
+                "severity": "medium",
+            }
+        )
     audio_pitch_span = 0.0 if stress_level < 2 else 0.006 + stress_level * 0.0028
     audio_pitch_factor = rng.uniform(1.0 - audio_pitch_span, 1.0 + audio_pitch_span)
     audio_sample_rate = rng.choice(
@@ -545,6 +576,7 @@ def build_plan(
         audio_noise_amplitude = rng.uniform(0.0008, 0.0045)
         audio_hum_amplitude = rng.choice([0.0, rng.uniform(0.0005, 0.0025)])
         audio_tone_amplitude = rng.choice([0.0, 0.0, rng.uniform(0.00035, 0.0016)])
+    audio_flanger_enabled = stress_level >= 4 and rng.random() < 0.55
 
     return TransformPlan(
         seed=seed,
@@ -643,6 +675,26 @@ def build_plan(
         audio_hum_amplitude=audio_hum_amplitude,
         audio_tone_frequency_hz=rng.choice([174, 220, 247, 330, 392, 440]),
         audio_tone_amplitude=audio_tone_amplitude,
+        audio_fft_noise_reduction=(
+            0.01 if stress_level < 2 else rng.uniform(1.4, 6.5 if stress_level >= 4 else 4.2)
+        ),
+        audio_fft_noise_floor=rng.uniform(-64.0, -38.0),
+        audio_phase_shift=0.0 if stress_level < 2 else rng.uniform(-0.18, 0.18),
+        audio_phase_order=rng.choice([4, 6, 8, 10, 12]),
+        audio_tilt_frequency_hz=rng.choice([1800, 2600, 4200, 6200, 9000]),
+        audio_tilt_slope=0.0 if stress_level < 2 else rng.uniform(-0.18, 0.18),
+        audio_crystalizer_intensity=(
+            0.0 if stress_level < 2 else rng.uniform(-0.45, 0.75)
+        ),
+        audio_extra_stereo_mult=1.0 if stress_level < 2 else rng.uniform(0.72, 1.58),
+        audio_phaser_delay_ms=0.0 if stress_level < 4 else rng.uniform(0.6, 2.8),
+        audio_phaser_decay=0.0 if stress_level < 4 else rng.uniform(0.05, 0.22),
+        audio_phaser_speed=0.1 if stress_level < 4 else rng.uniform(0.12, 0.65),
+        audio_flanger_enabled=audio_flanger_enabled,
+        audio_flanger_delay_ms=rng.uniform(0.4, 2.5),
+        audio_flanger_depth_ms=rng.uniform(0.4, 2.8),
+        audio_flanger_width=rng.uniform(8.0, 26.0),
+        audio_flanger_speed=rng.uniform(0.10, 0.42),
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
@@ -846,6 +898,20 @@ def audio_filter(plan: TransformPlan) -> str:
             f"c0={left_mix:.5f}*c0+{cross_mix:.5f}*c1|"
             f"c1={cross_mix:.5f}*c0+{left_mix:.5f}*c1"
         ),
+        (
+            f"afftdn=nr={plan.audio_fft_noise_reduction:.5f}:"
+            f"nf={plan.audio_fft_noise_floor:.5f}:tn=1:gs=6"
+        ),
+        (
+            f"aphaseshift=shift={plan.audio_phase_shift:.5f}:"
+            f"level=0.985:order={plan.audio_phase_order}"
+        ),
+        (
+            f"atilt=freq={plan.audio_tilt_frequency_hz}:"
+            f"slope={plan.audio_tilt_slope:.5f}:width=1800:order=5:level=1"
+        ),
+        f"crystalizer=i={plan.audio_crystalizer_intensity:.5f}:c=0",
+        f"extrastereo=m={plan.audio_extra_stereo_mult:.5f}:c=0",
         f"asetrate={48000 * plan.audio_pitch_factor:.3f}",
         (
             f"aresample={plan.audio_sample_rate}:async=1:first_pts=0:resampler=soxr:"
@@ -858,6 +924,24 @@ def audio_filter(plan: TransformPlan) -> str:
     if plan.audio_tremolo_depth:
         filters.append(
             f"tremolo=f={plan.audio_tremolo_rate_hz:.5f}:d={plan.audio_tremolo_depth:.5f}"
+        )
+    if plan.audio_phaser_decay:
+        filters.append(
+            "aphaser="
+            "in_gain=0.72:out_gain=0.88:"
+            f"delay={plan.audio_phaser_delay_ms:.5f}:"
+            f"decay={plan.audio_phaser_decay:.5f}:"
+            f"speed={plan.audio_phaser_speed:.5f}:type=s"
+        )
+    if plan.audio_flanger_enabled:
+        filters.append(
+            "flanger="
+            f"delay={plan.audio_flanger_delay_ms:.5f}:"
+            f"depth={plan.audio_flanger_depth_ms:.5f}:"
+            "regen=0:"
+            f"width={plan.audio_flanger_width:.5f}:"
+            f"speed={plan.audio_flanger_speed:.5f}:"
+            "shape=sinusoidal:phase=25:interp=linear"
         )
     filters.extend(
         [
