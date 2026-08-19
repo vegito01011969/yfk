@@ -91,7 +91,7 @@ The tool automatically inspects the input and builds a randomized transform plan
 - mild denoise, temporal grain mixing, synthetic noise, blur, and sharpening changes
 - small frame-rate and timing normalization
 - short fade/flash/progress-bar/watermark-style overlays on higher stress levels
-- audio high/low-pass normalization, subtle compression, slight EQ, high-quality resampling with randomized dithering, small volume adjustment, synchronized tempo matching, and optional small A/V delay
+- audio high/low-pass normalization, bass/treble shaping, two randomized parametric EQ bands, dynamic compression, companding, limiting, high-quality multi-stage resampling with randomized dithering, small volume adjustment, subtle pitch shift, stereo field remixing, synchronized tempo matching, optional micro echo, and optional small A/V delay
 - metadata/chapter stripping
 - H.264/AAC encoding with randomized sane encoder settings, GOP structure, reference frames, B-frames, adaptive quantization, profile/level, tune, deblock, trellis, lookahead, and psycho-visual parameters
 - optional multi-generation codec pass before the final transform, such as H.264/H.265 round trips

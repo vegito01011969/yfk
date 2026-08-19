@@ -97,6 +97,8 @@ class TransformPlan:
     watermark_y_pct: float
     speed: float
     audio_delay_ms: int
+    audio_pitch_factor: float
+    audio_sample_rate: int
     audio_volume_db: float
     audio_highpass_hz: int
     audio_lowpass_hz: int
@@ -104,6 +106,15 @@ class TransformPlan:
     audio_compressor_ratio: float
     audio_eq_frequency_hz: int
     audio_eq_gain_db: float
+    audio_eq2_frequency_hz: int
+    audio_eq2_gain_db: float
+    audio_bass_gain_db: float
+    audio_treble_gain_db: float
+    audio_stereo_mix: float
+    audio_echo_delay_ms: int
+    audio_echo_decay: float
+    audio_compand_points: str
+    audio_limiter_level: float
     crf: int
     preset: str
     tune: str | None
@@ -479,6 +490,34 @@ def build_plan(
                 "severity": codec_generations,
             }
         )
+    if stress_level >= 2:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "multi_band_eq_pitch_stereo_dynamics",
+                "severity": profile.name,
+            }
+        )
+    if stress_level >= 4:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "micro_echo_sample_rate_limiter",
+                "severity": "medium",
+            }
+        )
+    audio_pitch_span = 0.0 if stress_level < 2 else 0.006 + stress_level * 0.0028
+    audio_pitch_factor = rng.uniform(1.0 - audio_pitch_span, 1.0 + audio_pitch_span)
+    audio_sample_rate = rng.choice(
+        [44100, 48000]
+        if stress_level < 3
+        else [32000, 44100, 48000, 48000, 88200]
+    )
+    audio_echo_delay_ms = 0
+    audio_echo_decay = 0.0
+    if stress_level >= 4:
+        audio_echo_delay_ms = rng.choice([0, 0, 18, 24, 32, 45, 64])
+        audio_echo_decay = rng.uniform(0.025, 0.095) if audio_echo_delay_ms else 0.0
 
     return TransformPlan(
         seed=seed,
@@ -545,13 +584,30 @@ def build_plan(
         watermark_y_pct=watermark_y_pct,
         speed=speed,
         audio_delay_ms=0 if stress_level < 5 else rng.choice([0, 0, -30, -20, 20, 35, 50]),
-        audio_volume_db=rng.uniform(-1.4, 1.4),
-        audio_highpass_hz=rng.randint(16, 55),
-        audio_lowpass_hz=rng.randint(14500, 20500),
-        audio_compressor_threshold_db=rng.uniform(-25.0, -14.0),
-        audio_compressor_ratio=rng.uniform(1.08, 1.55),
-        audio_eq_frequency_hz=rng.choice([180, 240, 320, 3600, 5200, 7200]),
-        audio_eq_gain_db=rng.uniform(-1.8, 1.8),
+        audio_pitch_factor=audio_pitch_factor,
+        audio_sample_rate=audio_sample_rate,
+        audio_volume_db=rng.uniform(-2.2, 2.2),
+        audio_highpass_hz=rng.randint(14, 95 if stress_level >= 4 else 55),
+        audio_lowpass_hz=rng.randint(11800 if stress_level >= 4 else 14500, 20500),
+        audio_compressor_threshold_db=rng.uniform(-30.0, -12.0),
+        audio_compressor_ratio=rng.uniform(1.12, 2.25 if stress_level >= 4 else 1.55),
+        audio_eq_frequency_hz=rng.choice([120, 180, 240, 320, 480, 3600, 5200, 7200]),
+        audio_eq_gain_db=rng.uniform(-3.0, 3.0),
+        audio_eq2_frequency_hz=rng.choice([700, 950, 1400, 2200, 4200, 6800, 9200]),
+        audio_eq2_gain_db=rng.uniform(-2.4, 2.4),
+        audio_bass_gain_db=rng.uniform(-2.5, 2.5),
+        audio_treble_gain_db=rng.uniform(-2.5, 2.5),
+        audio_stereo_mix=rng.uniform(0.015, 0.105 if stress_level >= 4 else 0.055),
+        audio_echo_delay_ms=audio_echo_delay_ms,
+        audio_echo_decay=audio_echo_decay,
+        audio_compand_points=rng.choice(
+            [
+                "-80/-80|-45/-38|-18/-16|0/-1.5",
+                "-90/-90|-50/-44|-24/-20|-6/-5|0/-1",
+                "-70/-70|-36/-32|-12/-10|0/-1.2",
+            ]
+        ),
+        audio_limiter_level=rng.uniform(0.82, 0.98),
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
@@ -721,9 +777,16 @@ def video_filter(plan: TransformPlan) -> str:
 
 
 def audio_filter(plan: TransformPlan) -> str:
+    pitch_inverse = 1.0 / max(0.5, min(2.0, plan.audio_pitch_factor))
+    left_mix = 1.0 - plan.audio_stereo_mix
+    cross_mix = plan.audio_stereo_mix
     filters = [
+        "aformat=sample_fmts=fltp:channel_layouts=stereo",
+        "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20",
         f"highpass=f={plan.audio_highpass_hz}",
         f"lowpass=f={plan.audio_lowpass_hz}",
+        f"bass=g={plan.audio_bass_gain_db:.3f}:f=110:w=0.7",
+        f"treble=g={plan.audio_treble_gain_db:.3f}:f=6500:w=0.8",
         (
             "acompressor="
             f"threshold={plan.audio_compressor_threshold_db:.3f}dB:"
@@ -731,16 +794,40 @@ def audio_filter(plan: TransformPlan) -> str:
             "attack=12:release=120:makeup=1"
         ),
         (
+            "compand="
+            "attacks=0.008:decays=0.18:"
+            f"points={plan.audio_compand_points}:soft-knee=0.018:gain=0:volume=0"
+        ),
+        (
             f"equalizer=f={plan.audio_eq_frequency_hz}:"
             f"width_type=o:width=1.2:g={plan.audio_eq_gain_db:.3f}"
         ),
         (
-            "aresample=48000:async=1:first_pts=0:resampler=soxr:"
+            f"equalizer=f={plan.audio_eq2_frequency_hz}:"
+            f"width_type=o:width=0.9:g={plan.audio_eq2_gain_db:.3f}"
+        ),
+        (
+            "pan=stereo|"
+            f"c0={left_mix:.5f}*c0+{cross_mix:.5f}*c1|"
+            f"c1={cross_mix:.5f}*c0+{left_mix:.5f}*c1"
+        ),
+        f"asetrate={48000 * plan.audio_pitch_factor:.3f}",
+        (
+            f"aresample={plan.audio_sample_rate}:async=1:first_pts=0:resampler=soxr:"
             f"precision=20:dither_method={plan.audio_dither_method}"
         ),
+        f"atempo={pitch_inverse:.8f}",
+        "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20",
         f"volume={plan.audio_volume_db:.3f}dB",
+        f"alimiter=level_in=1:level_out={plan.audio_limiter_level:.5f}:limit=0.98",
         f"atempo={plan.speed:.8f}",
     ]
+    if plan.audio_echo_delay_ms:
+        filters.append(
+            "aecho="
+            f"in_gain=0.94:out_gain=0.96:"
+            f"delays={plan.audio_echo_delay_ms}:decays={plan.audio_echo_decay:.5f}"
+        )
     if plan.audio_delay_ms > 0:
         filters.append(f"adelay={plan.audio_delay_ms}:all=1")
     elif plan.audio_delay_ms < 0:
