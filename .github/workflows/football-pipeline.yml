@@ -75,19 +75,11 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install ffmpeg on Linux runners
-        if: runner.os == 'Linux'
-        run: |
-          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
-          fi
-
-      - name: Check ffmpeg on non-Linux runners
-        if: runner.os != 'Linux'
+      - name: Verify ffmpeg availability
         run: |
           command -v ffmpeg
           command -v ffprobe
+          ffmpeg -version | head -n 1
 
       - name: Install Python dependencies
         run: |
@@ -201,7 +193,7 @@ jobs:
 
       - name: Cleanup bulky football pipeline state
         if: always()
-        run: viral-pipeline cleanup --yes
+        run: python scripts/cleanup_pipeline_state.py
 
       - name: Save updated football pipeline state
         if: always()
