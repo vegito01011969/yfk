@@ -176,6 +176,34 @@ def test_provenance_transform_timeout_fails_open(tmp_path: Path, monkeypatch) ->
     assert debug["status"] == "provenance_transform_failed_open"
 
 
+def test_provenance_transform_passes_configured_level(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    settings.apply_provenance_transform = True
+    settings.provenance_transform_level = 2
+    script_path = tmp_path / "transform.py"
+    script_path.write_text("print('unused')\n", encoding="utf-8")
+    settings.provenance_transform_script = script_path
+    render_dir = tmp_path / "render"
+    render_dir.mkdir()
+    input_path = render_dir / "final_video.mp4"
+    input_path.write_text("pre-transform-media", encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        commands.append(command)
+        output = Path(command[command.index("--output") + 1])
+        output.write_text("transformed-media", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("viral_pipeline.stages.subprocess.run", fake_run)
+
+    output_path = _apply_provenance_transform_if_enabled(input_path, settings, render_dir)
+
+    assert output_path.read_text(encoding="utf-8") == "transformed-media"
+    assert "--level" in commands[0]
+    assert commands[0][commands[0].index("--level") + 1] == "2"
+
+
 def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     cookies_path = tmp_path / "cookies.txt"

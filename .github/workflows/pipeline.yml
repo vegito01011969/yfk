@@ -41,6 +41,7 @@ jobs:
       RENDER_COMMAND_TIMEOUT_SECONDS: "300"
       PROVENANCE_TRANSFORM_TIMEOUT_SECONDS: "300"
       PROVENANCE_TRANSFORM_FAIL_OPEN: "true"
+      PROVENANCE_TRANSFORM_LEVEL: "2"
       YOUTUBE_VIDEO_MADE_FOR_KIDS: "false"
       YOUTUBE_VIDEO_SELF_DECLARED_MADE_FOR_KIDS: "false"
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
@@ -170,6 +171,9 @@ jobs:
       - name: Validate Colab CLI access
         if: env.DOWNLOAD_BACKEND == 'colab'
         run: colab --auth="$COLAB_CLI_AUTH" sessions
+
+      - name: Validate YouTube upload auth
+        run: viral-pipeline auth-youtube-upload
 
       - name: Run full pipeline
         run: python scripts/run_pipeline_until_upload.py

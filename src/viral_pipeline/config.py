@@ -187,6 +187,7 @@ class Settings(BaseSettings):
     apply_provenance_transform: bool = True
     provenance_transform_timeout_seconds: int = 600
     provenance_transform_fail_open: bool = True
+    provenance_transform_level: int | None = None
     provenance_transform_script: Path = Field(
         default=Path("provenance_robustness_tool/transform.py")
     )

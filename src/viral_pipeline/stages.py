@@ -393,14 +393,17 @@ def _apply_provenance_transform_if_enabled(
         source_path = input_path
 
     try:
+        command = [
+            sys.executable,
+            str(script_path),
+            str(source_path),
+            "--output",
+            str(transformed_path),
+        ]
+        if settings.provenance_transform_level is not None:
+            command.extend(["--level", str(settings.provenance_transform_level)])
         subprocess.run(
-            [
-                sys.executable,
-                str(script_path),
-                str(source_path),
-                "--output",
-                str(transformed_path),
-            ],
+            command,
             check=True,
             capture_output=True,
             text=True,
@@ -1521,6 +1524,7 @@ def _validate_expected_upload_channel(youtube: Any, settings: Settings) -> dict[
 
 
 def _authenticated_youtube_service(settings: Settings) -> Any:
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import-untyped]
@@ -1541,7 +1545,15 @@ def _authenticated_youtube_service(settings: Settings) -> Any:
             scopes=scopes,
         )
     if credentials and credentials.expired and credentials.refresh_token:
-        credentials.refresh(Request())
+        try:
+            credentials.refresh(Request())
+        except RefreshError as exc:
+            raise ValueError(
+                "YouTube OAuth token refresh failed. The saved refresh token is "
+                "expired or revoked. Re-run `viral-pipeline auth-youtube-upload` "
+                "locally for this channel and update the matching "
+                "YOUTUBE_OAUTH_TOKEN_JSON GitHub secret."
+            ) from exc
     if not credentials or not credentials.valid:
         if os.getenv("CI"):
             raise ValueError(
