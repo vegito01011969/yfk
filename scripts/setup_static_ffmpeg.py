@@ -19,6 +19,7 @@ def main() -> int:
 
     subprocess.run([ffmpeg, "-version"], check=True)
     subprocess.run([ffprobe, "-version"], check=True)
+    print(f"bin_dir={bin_dir}")
     print(f"ffmpeg={ffmpeg}")
     print(f"ffprobe={ffprobe}")
     return 0
