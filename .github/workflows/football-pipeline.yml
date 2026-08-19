@@ -75,8 +75,15 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify ffmpeg availability
+      - name: Install ffmpeg if needed
+        timeout-minutes: 6
         run: |
+          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get install -y --no-install-recommends ffmpeg || {
+              sudo apt-get update -y
+              sudo apt-get install -y --no-install-recommends ffmpeg
+            }
+          fi
           command -v ffmpeg
           command -v ffprobe
           ffmpeg -version | head -n 1
