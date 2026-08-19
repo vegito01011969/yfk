@@ -17,6 +17,7 @@ from typing import Any
 
 MAX_ATTEMPTS = 6
 MIN_SSIM_SAMPLE = 0.68
+DEFAULT_STRESS_LEVEL = 4
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,9 @@ class VideoInfo:
 class TransformPlan:
     seed: int
     attempt: int
+    stress_level: int
     profile: str
+    operations: list[dict[str, Any]]
     crop_left: int
     crop_top: int
     crop_width: int
@@ -48,12 +51,20 @@ class TransformPlan:
     rotate_degrees: float
     translate_x: float
     translate_y: float
+    shear_x: float
+    shear_y: float
+    perspective_px: int
+    h_stretch: float
+    v_stretch: float
     fps: float
     brightness: float
     contrast: float
     saturation: float
     gamma: float
     hue_degrees: float
+    temperature_shift: float
+    vignette_strength: float
+    spatial_gradient_strength: float
     channel_rr: float
     channel_gg: float
     channel_bb: float
@@ -72,7 +83,20 @@ class TransformPlan:
     noise_strength: int
     grain_mix_frames: int
     unsharp_amount: float
+    blur_sigma: float
+    posterize_bits: int
+    fade_frames: int
+    flash_frame: str | None
+    flash_opacity: float
+    progress_bar_height: int
+    progress_bar_opacity: float
+    watermark_enabled: bool
+    watermark_opacity: float
+    watermark_size_pct: float
+    watermark_x_pct: float
+    watermark_y_pct: float
     speed: float
+    audio_delay_ms: int
     audio_volume_db: float
     audio_highpass_hz: int
     audio_lowpass_hz: int
@@ -101,6 +125,7 @@ class TransformPlan:
     video_track_timescale: int
     movflags: str
     metadata_padding_bytes: int
+    codec_generations: list[str]
 
 
 @dataclass(frozen=True)
@@ -293,15 +318,41 @@ def hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
+def clamp_stress_level(value: int) -> int:
+    return max(0, min(6, value))
+
+
+def build_plan(
+    info: VideoInfo,
+    seed: int,
+    attempt: int,
+    stress_level: int = DEFAULT_STRESS_LEVEL,
+) -> TransformPlan:
+    stress_level = clamp_stress_level(stress_level)
     rng = random.Random(seed + attempt * 7919)
-    if attempt == MAX_ATTEMPTS:
+    if stress_level == 0:
+        profile = VALIDATION_RESCUE_PROFILE
+    elif attempt == MAX_ATTEMPTS:
         profile = VALIDATION_RESCUE_PROFILE
     elif attempt <= 2:
-        profile_weights = [0.05, 0.20, 0.35, 0.40]
+        profile_weights = {
+            1: [0.70, 0.25, 0.05, 0.00],
+            2: [0.35, 0.45, 0.18, 0.02],
+            3: [0.16, 0.38, 0.34, 0.12],
+            4: [0.05, 0.20, 0.35, 0.40],
+            5: [0.02, 0.14, 0.34, 0.50],
+            6: [0.00, 0.10, 0.32, 0.58],
+        }.get(stress_level, [0.05, 0.20, 0.35, 0.40])
         profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
     elif attempt <= 4:
-        profile_weights = [0.12, 0.36, 0.34, 0.18]
+        profile_weights = {
+            1: [0.82, 0.18, 0.00, 0.00],
+            2: [0.48, 0.40, 0.12, 0.00],
+            3: [0.25, 0.44, 0.25, 0.06],
+            4: [0.12, 0.36, 0.34, 0.18],
+            5: [0.07, 0.28, 0.42, 0.23],
+            6: [0.05, 0.22, 0.43, 0.30],
+        }.get(stress_level, [0.12, 0.36, 0.34, 0.18])
         profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
     else:
         profile = PROFILES[0]
@@ -325,11 +376,116 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
     )
     working_width = even(math.ceil(info.width * overscan))
     working_height = even(math.ceil(info.height * overscan))
+    level_factor = stress_level / 6.0
+    shear_x = 0.0 if stress_level < 3 else rng.uniform(-0.018, 0.018) * level_factor
+    shear_y = 0.0 if stress_level < 4 else rng.uniform(-0.010, 0.010) * level_factor
+    perspective_px = (
+        0
+        if stress_level < 4 or profile.name == VALIDATION_RESCUE_PROFILE.name
+        else rng.choice([0, 0, 1, 2, 3, 4, 6, 8])
+    )
+    h_stretch = 1.0 if stress_level < 3 else rng.uniform(0.985, 1.018)
+    v_stretch = 1.0 if stress_level < 3 else rng.uniform(0.985, 1.018)
+    spatial_gradient_strength = (
+        0.0 if stress_level < 3 else rng.uniform(-0.08, 0.08) * level_factor
+    )
+    fade_frames = 0 if stress_level < 3 else rng.choice([0, 0, 3, 5, 8, 12])
+    flash_frame = None
+    flash_opacity = 0.0
+    if stress_level >= 5 and rng.random() < 0.35:
+        flash_frame = rng.choice(["black", "white"])
+        flash_opacity = rng.uniform(0.10, 0.22)
+    progress_bar_height = 0
+    progress_bar_opacity = 0.0
+    if stress_level >= 4 and rng.random() < 0.45:
+        progress_bar_height = max(2, even(int(info.height * rng.uniform(0.004, 0.012))))
+        progress_bar_opacity = rng.uniform(0.16, 0.34)
+    watermark_enabled = stress_level >= 5 and rng.random() < 0.45
+    watermark_opacity = rng.uniform(0.10, 0.24) if watermark_enabled else 0.0
+    watermark_size_pct = rng.uniform(0.035, 0.075) if watermark_enabled else 0.0
+    watermark_x_pct = rng.choice([rng.uniform(0.025, 0.08), rng.uniform(0.82, 0.93)])
+    watermark_y_pct = rng.choice([rng.uniform(0.04, 0.10), rng.uniform(0.80, 0.90)])
+    codec_generations = []
+    if stress_level >= 5 and profile.name != VALIDATION_RESCUE_PROFILE.name:
+        codec_generations = rng.choice(
+            [
+                [],
+                ["libx265"],
+                ["libx264", "libx265"],
+                ["libx265", "libx264"],
+            ]
+        )
+    operations = [
+        {"category": "benchmark", "name": f"level_{stress_level}", "severity": stress_level},
+        {
+            "category": "geometry",
+            "name": "crop_resize_rotate_pad_crop",
+            "severity": round(crop_pct, 4),
+        },
+        {"category": "geometry", "name": "subpixel_translate", "severity": "low"},
+        {
+            "category": "color",
+            "name": "color_grade_channel_mix_chroma_shift",
+            "severity": profile.name,
+        },
+        {"category": "temporal", "name": "speed_fps_conversion", "severity": profile.name},
+        {"category": "audio", "name": "eq_compress_resample_tempo", "severity": profile.name},
+        {"category": "codec", "name": "h264_aac_reencode", "severity": f"crf_{profile.crf_range}"},
+        {
+            "category": "container",
+            "name": "metadata_strip_timescale_mux_variation",
+            "severity": "low",
+        },
+    ]
+    if abs(shear_x) > 0.0001 or abs(shear_y) > 0.0001:
+        operations.append({"category": "geometry", "name": "mild_affine_shear", "severity": "low"})
+    if perspective_px:
+        operations.append(
+            {
+                "category": "geometry",
+                "name": "mild_perspective_keystone",
+                "severity": perspective_px,
+            }
+        )
+    if abs(h_stretch - 1.0) > 0.002 or abs(v_stretch - 1.0) > 0.002:
+        operations.append({"category": "geometry", "name": "non_uniform_scale", "severity": "low"})
+    if spatial_gradient_strength:
+        operations.append(
+            {"category": "color", "name": "spatial_brightness_gradient", "severity": "low"}
+        )
+    if fade_frames:
+        operations.append(
+            {"category": "editing", "name": "short_fade_in_out", "severity": fade_frames}
+        )
+    if flash_frame:
+        operations.append(
+            {
+                "category": "editing",
+                "name": f"{flash_frame}_flash_overlay",
+                "severity": "low",
+            }
+        )
+    if progress_bar_height:
+        operations.append({"category": "overlay", "name": "subtle_progress_bar", "severity": "low"})
+    if watermark_enabled:
+        operations.append(
+            {"category": "overlay", "name": "subtle_corner_watermark", "severity": "low"}
+        )
+    if codec_generations:
+        operations.append(
+            {
+                "category": "codec",
+                "name": "multi_generation_transcode",
+                "severity": codec_generations,
+            }
+        )
 
     return TransformPlan(
         seed=seed,
         attempt=attempt,
+        stress_level=stress_level,
         profile=profile.name,
+        operations=operations,
         crop_left=crop_left,
         crop_top=crop_top,
         crop_width=crop_width,
@@ -343,12 +499,20 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
         rotate_degrees=rotate_degrees,
         translate_x=rng.uniform(-1.35, 1.35),
         translate_y=rng.uniform(-1.35, 1.35),
+        shear_x=shear_x,
+        shear_y=shear_y,
+        perspective_px=perspective_px,
+        h_stretch=h_stretch,
+        v_stretch=v_stretch,
         fps=target_fps,
         brightness=rng.uniform(*profile.brightness_range),
         contrast=rng.uniform(*profile.contrast_range),
         saturation=rng.uniform(*profile.saturation_range),
         gamma=rng.uniform(*profile.gamma_range),
         hue_degrees=rng.uniform(-profile.hue_abs_max, profile.hue_abs_max),
+        temperature_shift=rng.uniform(-0.035, 0.035) * level_factor,
+        vignette_strength=0.0 if stress_level < 4 else rng.uniform(0.0, 0.18) * level_factor,
+        spatial_gradient_strength=spatial_gradient_strength,
         channel_rr=rng.uniform(0.988, 1.014),
         channel_gg=rng.uniform(0.988, 1.014),
         channel_bb=rng.uniform(0.988, 1.014),
@@ -367,7 +531,20 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
         noise_strength=rng.randint(*profile.noise_strength_range),
         grain_mix_frames=rng.choice([1, 1, 2]),
         unsharp_amount=rng.uniform(*profile.unsharp_range),
+        blur_sigma=0.0 if stress_level < 3 else rng.choice([0.0, 0.0, 0.25, 0.35, 0.50]),
+        posterize_bits=0 if stress_level < 5 else rng.choice([0, 0, 0, 5, 6]),
+        fade_frames=fade_frames,
+        flash_frame=flash_frame,
+        flash_opacity=flash_opacity,
+        progress_bar_height=progress_bar_height,
+        progress_bar_opacity=progress_bar_opacity,
+        watermark_enabled=watermark_enabled,
+        watermark_opacity=watermark_opacity,
+        watermark_size_pct=watermark_size_pct,
+        watermark_x_pct=watermark_x_pct,
+        watermark_y_pct=watermark_y_pct,
         speed=speed,
+        audio_delay_ms=0 if stress_level < 5 else rng.choice([0, 0, -30, -20, 20, 35, 50]),
         audio_volume_db=rng.uniform(-1.4, 1.4),
         audio_highpass_hz=rng.randint(16, 55),
         audio_lowpass_hz=rng.randint(14500, 20500),
@@ -396,10 +573,14 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
         video_track_timescale=rng.choice([24000, 30000, 60000, 90000]),
         movflags=rng.choice(["+faststart", "+faststart+use_metadata_tags"]),
         metadata_padding_bytes=rng.choice([0, 4096, 8192, 16384]),
+        codec_generations=codec_generations,
     )
 
 
 def video_filter(plan: TransformPlan) -> str:
+    stretch_width = even(int(plan.working_width * plan.h_stretch))
+    stretch_height = even(int(plan.working_height * plan.v_stretch))
+    perspective_px = min(plan.perspective_px, plan.working_width // 20, plan.working_height // 20)
     filters = [
         f"crop={plan.crop_width}:{plan.crop_height}:{plan.crop_left}:{plan.crop_top}",
         (
@@ -410,6 +591,27 @@ def video_filter(plan: TransformPlan) -> str:
             f"pad={plan.working_width}:{plan.working_height}:"
             "(ow-iw)/2:(oh-ih)/2:color=black"
         ),
+        f"scale={stretch_width}:{stretch_height}:flags={plan.scale_flags_primary}",
+        (
+            f"scale={plan.working_width}:{plan.working_height}:"
+            f"flags={plan.scale_flags_final}"
+        ),
+    ]
+    if perspective_px:
+        top_left_x = perspective_px
+        top_right_x = plan.working_width - 1 - max(0, int(perspective_px * 0.35))
+        bottom_left_x = max(0, int(perspective_px * 0.35))
+        bottom_right_x = plan.working_width - 1 - perspective_px
+        filters.append(
+            "perspective="
+            f"x0={top_left_x}:y0=0:"
+            f"x1={top_right_x}:y1={perspective_px}:"
+            f"x2={bottom_left_x}:y2={plan.working_height - 1 - perspective_px}:"
+            f"x3={bottom_right_x}:y3={plan.working_height - 1}:"
+            "sense=destination"
+        )
+    filters.extend(
+        [
         f"rotate={math.radians(plan.rotate_degrees):.8f}:fillcolor=black",
         (
             f"crop={plan.output_width}:{plan.output_height}:"
@@ -423,17 +625,19 @@ def video_filter(plan: TransformPlan) -> str:
             f"eq=brightness={plan.brightness:.5f}:contrast={plan.contrast:.5f}:"
             f"saturation={plan.saturation:.5f}:gamma={plan.gamma:.5f}"
         ),
-        f"hue=h={plan.hue_degrees:.5f}",
+            f"hue=h={plan.hue_degrees:.5f}",
         (
             f"colorchannelmixer=rr={plan.channel_rr:.5f}:gg={plan.channel_gg:.5f}:"
-            f"bb={plan.channel_bb:.5f}:rg={plan.channel_rg:.5f}:"
-            f"gb={plan.channel_gb:.5f}:br={plan.channel_br:.5f}"
+            f"bb={plan.channel_bb + plan.temperature_shift:.5f}:"
+            f"rg={plan.channel_rg:.5f}:gb={plan.channel_gb:.5f}:"
+            f"br={plan.channel_br - plan.temperature_shift:.5f}"
         ),
         (
             f"hqdn3d={plan.denoise_luma:.3f}:{plan.denoise_chroma:.3f}:"
             f"{plan.denoise_luma * 1.8:.3f}:{plan.denoise_chroma * 1.8:.3f}"
         ),
-    ]
+        ]
+    )
     if any(
         value
         for value in (
@@ -454,46 +658,143 @@ def video_filter(plan: TransformPlan) -> str:
     if plan.grain_mix_frames > 1:
         weights = " ".join("1" for _ in range(plan.grain_mix_frames))
         filters.append(f"tmix=frames={plan.grain_mix_frames}:weights='{weights}'")
+    if plan.blur_sigma:
+        filters.append(f"gblur=sigma={plan.blur_sigma:.3f}:steps=1")
+    if plan.posterize_bits:
+        posterize_step = 2 ** (8 - plan.posterize_bits)
+        filters.append(
+            "format=rgb24,lutrgb="
+            f"r='trunc(val/{posterize_step})*{posterize_step}':"
+            f"g='trunc(val/{posterize_step})*{posterize_step}':"
+            f"b='trunc(val/{posterize_step})*{posterize_step}'"
+        )
+    if plan.vignette_strength:
+        filters.append("vignette=angle=PI/5:eval=frame:mode=forward")
     filters.extend(
         [
             f"noise=alls={plan.noise_strength}:allf=t+u",
             f"unsharp=5:5:{plan.unsharp_amount:.4f}:3:3:0.0",
             f"setpts={1 / plan.speed:.8f}*PTS",
             f"fps={plan.fps:.3f}",
-            "format=yuv420p",
-            "setsar=1",
         ]
     )
+    if plan.fade_frames:
+        fade_duration = max(0.03, plan.fade_frames / max(plan.fps, 1.0))
+        filters.append(f"fade=t=in:st=0:d={fade_duration:.4f}:alpha=0")
+    filters.extend(["format=yuv420p", "setsar=1"])
     if plan.edge_matte_px:
         filters.append(
             f"drawbox=x=0:y=0:w=iw:h=ih:color=black@0.18:t={plan.edge_matte_px}"
+        )
+    if plan.spatial_gradient_strength:
+        overlay_color = "white" if plan.spatial_gradient_strength > 0 else "black"
+        opacity = min(0.12, abs(plan.spatial_gradient_strength))
+        filters.append(
+            f"drawbox=x=0:y=0:w=iw:h=ih/3:color={overlay_color}@{opacity:.3f}:t=fill"
+        )
+    if plan.progress_bar_height:
+        filters.append(
+            "drawbox="
+            f"x=0:y=ih-{plan.progress_bar_height}:"
+            f"w=iw*0.78:h={plan.progress_bar_height}:"
+            f"color=white@{plan.progress_bar_opacity:.3f}:t=fill"
+        )
+    if plan.watermark_enabled:
+        box_size = max(
+            8,
+            even(int(min(plan.output_width, plan.output_height) * plan.watermark_size_pct)),
+        )
+        filters.append(
+            "drawbox="
+            f"x=iw*{plan.watermark_x_pct:.4f}:"
+            f"y=ih*{plan.watermark_y_pct:.4f}:"
+            f"w={box_size}:h={box_size}:"
+            f"color=white@{plan.watermark_opacity:.3f}:t=fill"
+        )
+    if plan.flash_frame:
+        flash_color = plan.flash_frame
+        filters.append(
+            f"drawbox=x=0:y=0:w=iw:h=ih:color={flash_color}@{plan.flash_opacity:.3f}:"
+            f"t=fill:enable='between(t,0.12,0.16)'"
         )
     return ",".join(filters)
 
 
 def audio_filter(plan: TransformPlan) -> str:
-    return ",".join(
-        [
-            f"highpass=f={plan.audio_highpass_hz}",
-            f"lowpass=f={plan.audio_lowpass_hz}",
-            (
-                "acompressor="
-                f"threshold={plan.audio_compressor_threshold_db:.3f}dB:"
-                f"ratio={plan.audio_compressor_ratio:.3f}:"
-                "attack=12:release=120:makeup=1"
-            ),
-            (
-                f"equalizer=f={plan.audio_eq_frequency_hz}:"
-                f"width_type=o:width=1.2:g={plan.audio_eq_gain_db:.3f}"
-            ),
-            (
-                "aresample=48000:async=1:first_pts=0:resampler=soxr:"
-                f"precision=20:dither_method={plan.audio_dither_method}"
-            ),
-            f"volume={plan.audio_volume_db:.3f}dB",
-            f"atempo={plan.speed:.8f}",
-        ]
-    )
+    filters = [
+        f"highpass=f={plan.audio_highpass_hz}",
+        f"lowpass=f={plan.audio_lowpass_hz}",
+        (
+            "acompressor="
+            f"threshold={plan.audio_compressor_threshold_db:.3f}dB:"
+            f"ratio={plan.audio_compressor_ratio:.3f}:"
+            "attack=12:release=120:makeup=1"
+        ),
+        (
+            f"equalizer=f={plan.audio_eq_frequency_hz}:"
+            f"width_type=o:width=1.2:g={plan.audio_eq_gain_db:.3f}"
+        ),
+        (
+            "aresample=48000:async=1:first_pts=0:resampler=soxr:"
+            f"precision=20:dither_method={plan.audio_dither_method}"
+        ),
+        f"volume={plan.audio_volume_db:.3f}dB",
+        f"atempo={plan.speed:.8f}",
+    ]
+    if plan.audio_delay_ms > 0:
+        filters.append(f"adelay={plan.audio_delay_ms}:all=1")
+    elif plan.audio_delay_ms < 0:
+        filters.extend(
+            [
+                f"atrim=start={abs(plan.audio_delay_ms) / 1000:.4f}",
+                "asetpts=PTS-STARTPTS",
+            ]
+        )
+    return ",".join(filters)
+
+
+def transcode_generation(
+    input_path: Path,
+    output_path: Path,
+    codec: str,
+    plan: TransformPlan,
+    generation: int,
+) -> None:
+    command = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-i",
+        str(input_path),
+        "-map_metadata",
+        "-1",
+        "-map_chapters",
+        "-1",
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c:v",
+        codec,
+        "-preset",
+        "fast" if codec == "libx265" else "medium",
+        "-crf",
+        str(min(32, plan.crf + generation + 1)),
+        "-g",
+        str(max(24, plan.gop + generation * 7)),
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        plan.audio_bitrate,
+        "-ar",
+        "48000",
+        "-movflags",
+        "+faststart",
+        str(output_path),
+    ]
+    run(command)
 
 
 def transform_once(
@@ -502,12 +803,21 @@ def transform_once(
     info: VideoInfo,
     plan: TransformPlan,
 ) -> None:
+    source_path = input_path
+    generation_paths: list[Path] = []
+    for generation, codec in enumerate(plan.codec_generations, start=1):
+        generation_path = output_path.with_name(
+            f"{output_path.stem}.generation_{generation}{output_path.suffix}"
+        )
+        transcode_generation(source_path, generation_path, codec, plan, generation)
+        generation_paths.append(generation_path)
+        source_path = generation_path
     command = [
         "ffmpeg",
         "-y",
         "-hide_banner",
         "-i",
-        str(input_path),
+        str(source_path),
         "-map_metadata",
         "-1",
         "-map_chapters",
@@ -583,7 +893,11 @@ def transform_once(
     if plan.metadata_padding_bytes:
         command.extend(["-moov_size", str(plan.metadata_padding_bytes)])
     command.append(str(output_path))
-    run(command)
+    try:
+        run(command)
+    finally:
+        for path in generation_paths:
+            path.unlink(missing_ok=True)
 
 
 def compare_ssim(input_path: Path, output_path: Path, tmpdir: Path, fps: float) -> float | None:
@@ -726,6 +1040,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("input", type=Path, help="Input video path")
     parser.add_argument("--output", "-o", type=Path, help="Optional output path")
     parser.add_argument("--seed", type=int, help="Optional seed for reproducibility")
+    parser.add_argument(
+        "--level",
+        type=int,
+        default=DEFAULT_STRESS_LEVEL,
+        choices=range(0, 7),
+        metavar="0-6",
+        help=(
+            "Benchmark stress level: 0 identical-style rescue, 1 light, "
+            "4 composed default, 6 strongest detector-agnostic stress."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -739,6 +1064,7 @@ def main() -> int:
     require_tool("ffprobe")
 
     seed = int(args.seed if args.seed is not None else time.time_ns() & 0xFFFFFFFF)
+    stress_level = clamp_stress_level(args.level)
     output_path = (
         args.output.expanduser().resolve() if args.output else default_output_path(input_path, seed)
     )
@@ -749,7 +1075,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="video_robustness_") as tmp:
         tmpdir = Path(tmp)
         for attempt in range(1, MAX_ATTEMPTS + 1):
-            plan = build_plan(input_info, seed, attempt)
+            plan = build_plan(input_info, seed, attempt, stress_level=stress_level)
             candidate_path = tmpdir / f"candidate_{attempt}.mp4"
             record: dict[str, Any] = {"attempt": attempt, "plan": asdict(plan)}
             try:
@@ -765,9 +1091,11 @@ def main() -> int:
                         debug_path,
                         {
                             "seed": seed,
+                            "stress_level": stress_level,
                             "input": str(input_path),
                             "output": str(output_path),
                             "selected_attempt": attempt,
+                            "selected_operations": plan.operations,
                             "attempts": attempts,
                         },
                     )
@@ -787,6 +1115,7 @@ def main() -> int:
         debug_path,
         {
             "seed": seed,
+            "stress_level": stress_level,
             "input": str(input_path),
             "output": str(output_path),
             "selected_attempt": None,

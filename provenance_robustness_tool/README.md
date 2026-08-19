@@ -34,6 +34,22 @@ Optional explicit output:
 python transform.py input.mp4 --output output.mp4
 ```
 
+Optional benchmark hardness:
+
+```bash
+python transform.py input.mp4 --level 6
+```
+
+Levels are detector-agnostic stress profiles:
+
+- `0`: validation-rescue style light transform
+- `1`: light single/few-operation transform
+- `2`: moderate paired transforms
+- `3`: several composed transforms
+- `4`: default composed benchmark
+- `5`: heavy composed benchmark with occasional overlays and codec generations
+- `6`: strongest local stress profile, still validated for similarity and playability
+
 ## Self-Test Report
 
 After generating a derivative, compare the original and output:
@@ -67,14 +83,18 @@ The tool automatically inspects the input and builds a randomized transform plan
 - small crop and resize back to the original dimensions
 - slight working-resolution overscan followed by micro-rotation and center crop
 - randomized scaler kernels, sub-pixel translation, and a second resize pass
+- mild non-uniform scaling, keystone/perspective perturbation, and affine-style reframing
 - slight brightness, contrast, saturation, and gamma adjustment
 - tiny hue adjustment
-- subtle RGB channel mixing, chroma-plane shifts, and debanding
-- mild denoise, temporal grain mixing, synthetic noise, and sharpening changes
+- subtle RGB channel mixing, color-temperature shift, chroma-plane shifts, and debanding
+- optional spatially varying brightness/tint, vignette, posterization, blur, and edge matte
+- mild denoise, temporal grain mixing, synthetic noise, blur, and sharpening changes
 - small frame-rate and timing normalization
-- audio high/low-pass normalization, subtle compression, slight EQ, high-quality resampling with randomized dithering, small volume adjustment, and synchronized tempo matching
+- short fade/flash/progress-bar/watermark-style overlays on higher stress levels
+- audio high/low-pass normalization, subtle compression, slight EQ, high-quality resampling with randomized dithering, small volume adjustment, synchronized tempo matching, and optional small A/V delay
 - metadata/chapter stripping
 - H.264/AAC encoding with randomized sane encoder settings, GOP structure, reference frames, B-frames, adaptive quantization, profile/level, tune, deblock, trellis, lookahead, and psycho-visual parameters
+- optional multi-generation codec pass before the final transform, such as H.264/H.265 round trips
 - MP4 output with fast-start layout, varied video track timescale, randomized muxer flags, and optional reserved metadata padding
 
 It validates the output for:
@@ -89,7 +109,7 @@ It validates the output for:
 
 If validation fails, it retries with a new transform plan. Early attempts now bias toward stronger perceptual-shift and representation-heavy profiles. Later attempts bias toward safer perceptual-close settings, and the final attempt uses a conservative validation-rescue profile that preserves geometry while still re-encoding, retiming, remuxing, and lightly adjusting audio/video. Intermediate files are cleaned automatically.
 
-The debug JSON records the selected stress profile, every randomized parameter, every validation attempt, sampled SSIM, duration drift, file-size delta, frame-rate delta, and the technical-difference score. Keep that file with test results if you need reproducibility.
+The debug JSON records the selected stress level, selected operations, stress profile, every randomized parameter, every validation attempt, sampled SSIM, duration drift, file-size delta, frame-rate delta, and the technical-difference score. Keep that file with test results if you need reproducibility.
 
 ## Suggested Blind Evaluation
 
