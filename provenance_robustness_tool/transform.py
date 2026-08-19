@@ -115,6 +115,14 @@ class TransformPlan:
     audio_echo_decay: float
     audio_compand_points: str
     audio_limiter_level: float
+    audio_tremolo_rate_hz: float
+    audio_tremolo_depth: float
+    audio_noise_color: str
+    audio_noise_amplitude: float
+    audio_hum_frequency_hz: int
+    audio_hum_amplitude: float
+    audio_tone_frequency_hz: int
+    audio_tone_amplitude: float
     crf: int
     preset: str
     tune: str | None
@@ -506,6 +514,14 @@ def build_plan(
                 "severity": "medium",
             }
         )
+    if stress_level >= 2:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "low_volume_generated_noise_hum_tone_mix",
+                "severity": "low",
+            }
+        )
     audio_pitch_span = 0.0 if stress_level < 2 else 0.006 + stress_level * 0.0028
     audio_pitch_factor = rng.uniform(1.0 - audio_pitch_span, 1.0 + audio_pitch_span)
     audio_sample_rate = rng.choice(
@@ -518,6 +534,17 @@ def build_plan(
     if stress_level >= 4:
         audio_echo_delay_ms = rng.choice([0, 0, 18, 24, 32, 45, 64])
         audio_echo_decay = rng.uniform(0.025, 0.095) if audio_echo_delay_ms else 0.0
+    audio_noise_amplitude = 0.0
+    audio_hum_amplitude = 0.0
+    audio_tone_amplitude = 0.0
+    if stress_level >= 2:
+        audio_noise_amplitude = rng.uniform(0.00065, 0.0025)
+        audio_hum_amplitude = rng.choice([0.0, rng.uniform(0.00025, 0.0012)])
+        audio_tone_amplitude = rng.choice([0.0, 0.0, rng.uniform(0.0002, 0.0009)])
+    if stress_level >= 4:
+        audio_noise_amplitude = rng.uniform(0.0008, 0.0045)
+        audio_hum_amplitude = rng.choice([0.0, rng.uniform(0.0005, 0.0025)])
+        audio_tone_amplitude = rng.choice([0.0, 0.0, rng.uniform(0.00035, 0.0016)])
 
     return TransformPlan(
         seed=seed,
@@ -608,6 +635,14 @@ def build_plan(
             ]
         ),
         audio_limiter_level=rng.uniform(0.82, 0.98),
+        audio_tremolo_rate_hz=rng.uniform(0.08, 0.55),
+        audio_tremolo_depth=0.0 if stress_level < 3 else rng.uniform(0.006, 0.035),
+        audio_noise_color=rng.choice(["white", "pink", "brown"]),
+        audio_noise_amplitude=audio_noise_amplitude,
+        audio_hum_frequency_hz=rng.choice([50, 60, 100, 120]),
+        audio_hum_amplitude=audio_hum_amplitude,
+        audio_tone_frequency_hz=rng.choice([174, 220, 247, 330, 392, 440]),
+        audio_tone_amplitude=audio_tone_amplitude,
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
@@ -819,9 +854,17 @@ def audio_filter(plan: TransformPlan) -> str:
         f"atempo={pitch_inverse:.8f}",
         "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20",
         f"volume={plan.audio_volume_db:.3f}dB",
+    ]
+    if plan.audio_tremolo_depth:
+        filters.append(
+            f"tremolo=f={plan.audio_tremolo_rate_hz:.5f}:d={plan.audio_tremolo_depth:.5f}"
+        )
+    filters.extend(
+        [
         f"alimiter=level_in=1:level_out={plan.audio_limiter_level:.5f}:limit=0.98",
         f"atempo={plan.speed:.8f}",
-    ]
+        ]
+    )
     if plan.audio_echo_delay_ms:
         filters.append(
             "aecho="
@@ -838,6 +881,50 @@ def audio_filter(plan: TransformPlan) -> str:
             ]
         )
     return ",".join(filters)
+
+
+def audio_filter_graph(plan: TransformPlan, duration_seconds: float) -> str:
+    duration = max(0.5, duration_seconds + 2.0)
+    parts = [f"[0:a:0]{audio_filter(plan)}[a0]"]
+    mix_inputs = ["[a0]"]
+    if plan.audio_noise_amplitude:
+        parts.append(
+            "anoisesrc="
+            f"color={plan.audio_noise_color}:"
+            f"amplitude={plan.audio_noise_amplitude:.7f}:"
+            f"sample_rate=48000:duration={duration:.5f},"
+            "asetpts=PTS-STARTPTS[anoise]"
+        )
+        mix_inputs.append("[anoise]")
+    if plan.audio_hum_amplitude:
+        parts.append(
+            "sine="
+            f"frequency={plan.audio_hum_frequency_hz}:"
+            f"sample_rate=48000:duration={duration:.5f},"
+            f"volume={plan.audio_hum_amplitude:.7f},"
+            "asetpts=PTS-STARTPTS[ahum]"
+        )
+        mix_inputs.append("[ahum]")
+    if plan.audio_tone_amplitude:
+        parts.append(
+            "sine="
+            f"frequency={plan.audio_tone_frequency_hz}:"
+            f"sample_rate=48000:duration={duration:.5f},"
+            f"volume={plan.audio_tone_amplitude:.7f},"
+            "asetpts=PTS-STARTPTS[atone]"
+        )
+        mix_inputs.append("[atone]")
+    if len(mix_inputs) == 1:
+        parts.append("[a0]anull[aout]")
+    else:
+        parts.append(
+            "".join(mix_inputs)
+            + f"amix=inputs={len(mix_inputs)}:duration=first:"
+            "dropout_transition=0:normalize=0,"
+            f"alimiter=level_in=1:level_out={plan.audio_limiter_level:.5f}:limit=0.98"
+            "[aout]"
+        )
+    return ";".join(parts)
 
 
 def transcode_generation(
@@ -909,13 +996,23 @@ def transform_once(
         "-1",
         "-map_chapters",
         "-1",
-        "-vf",
-        video_filter(plan),
     ]
     if info.has_audio:
-        command.extend(["-af", audio_filter(plan), "-map", "0:v:0", "-map", "0:a:0"])
+        command.extend(
+            [
+                "-filter_complex",
+                (
+                    f"[0:v:0]{video_filter(plan)}[vout];"
+                    f"{audio_filter_graph(plan, info.duration)}"
+                ),
+                "-map",
+                "[vout]",
+                "-map",
+                "[aout]",
+            ]
+        )
     else:
-        command.extend(["-map", "0:v:0", "-an"])
+        command.extend(["-vf", video_filter(plan), "-map", "0:v:0", "-an"])
     command.extend(
         [
             "-c:v",
