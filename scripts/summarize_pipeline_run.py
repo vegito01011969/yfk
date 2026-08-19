@@ -40,6 +40,7 @@ def main() -> None:
     upload_reason = (
         upload_metadata.get("reason") if isinstance(upload_metadata, dict) else None
     )
+    download_summary = context.get("metadata", {}).get("download_summary") or {}
 
     trends = context.get("selected_trends") or []
     trend = trends[0] if trends else {}
@@ -70,6 +71,36 @@ def main() -> None:
     ]
     if upload_reason:
         lines.append(f"- Upload skip reason: `{upload_reason}`")
+    if isinstance(download_summary, dict) and download_summary:
+        lines.extend(
+            [
+                f"- Download backend: `{download_summary.get('backend') or 'unknown'}`",
+                (
+                    "- Download attempts/success/fail: "
+                    f"`{download_summary.get('attempted_count', 0)}` / "
+                    f"`{download_summary.get('downloaded_count', 0)}` / "
+                    f"`{download_summary.get('failed_count', 0)}`"
+                ),
+                f"- Download failure counts: `{download_summary.get('failure_counts') or {}}`",
+                f"- Download error counts: `{download_summary.get('error_counts') or {}}`",
+            ]
+        )
+        sample_failures = download_summary.get("sample_failures")
+        if isinstance(sample_failures, list) and sample_failures:
+            lines.append("")
+            lines.append("### Sample Download Failures")
+            for item in sample_failures[:3]:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    "- "
+                    f"`{item.get('id')}` "
+                    f"`{item.get('kind')}` "
+                    f"`{item.get('error')}`"
+                )
+                stderr = str(item.get("stderr") or "").strip()
+                if stderr:
+                    lines.append(f"  - stderr: `{stderr[-240:]}`")
     if upload.get("video_id"):
         lines.append(f"- YouTube video ID: `{upload['video_id']}`")
     lines.append("")

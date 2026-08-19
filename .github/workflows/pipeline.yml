@@ -191,6 +191,8 @@ jobs:
             workdir/runs/**/publish/publish_manifest.json
             workdir/runs/**/upload/youtube_upload.json
             workdir/runs/**/render/*.debug.json
+            workdir/runs/**/downloads/colab_batch_job.json
+            workdir/runs/**/downloads/result.json
           retention-days: 3
 
       - name: Cleanup bulky pipeline state

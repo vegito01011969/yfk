@@ -70,6 +70,55 @@ def _dedupe_videos(videos: list[YouTubeVideo]) -> list[YouTubeVideo]:
     return unique
 
 
+def _download_summary(
+    *,
+    candidates: list[YouTubeVideo],
+    downloaded: list[YouTubeVideo],
+    failed: list[YouTubeVideo],
+    attempted_count: int,
+    max_attempts: int,
+    min_downloads_for_upload: int,
+    max_download_videos: int,
+    backend: str,
+) -> dict[str, Any]:
+    failure_counts: dict[str, int] = {}
+    error_counts: dict[str, int] = {}
+    samples: list[dict[str, Any]] = []
+    for video in failed:
+        metadata = video.metadata
+        kind = str(metadata.get("download_error_kind") or "download_error")
+        error = str(metadata.get("download_error") or "unknown")
+        failure_counts[kind] = failure_counts.get(kind, 0) + 1
+        error_counts[error] = error_counts.get(error, 0) + 1
+        if len(samples) < 5:
+            samples.append(
+                {
+                    "id": video.id,
+                    "title": video.title[:120],
+                    "url": video.url,
+                    "kind": kind,
+                    "error": error[:240],
+                    "stderr": str(metadata.get("download_stderr") or "")[-800:],
+                }
+            )
+
+    return {
+        "backend": backend,
+        "candidate_count": len(candidates),
+        "attempted_count": attempted_count,
+        "max_attempts": max_attempts,
+        "downloaded_count": len(downloaded),
+        "failed_count": len(failed),
+        "min_downloads_for_upload": max(1, min_downloads_for_upload),
+        "max_download_videos": max_download_videos,
+        "failure_counts": failure_counts,
+        "error_counts": error_counts,
+        "sample_failures": samples,
+        "downloaded_ids": [video.id for video in downloaded],
+        "failed_ids": [video.id for video in failed[:20]],
+    }
+
+
 def _clip_hash_distance(left: str, right: str) -> int:
     try:
         return (int(left, 16) ^ int(right, 16)).bit_count()
@@ -825,6 +874,16 @@ class DownloadVideosStage(PipelineStage):
                     )
                     LOGGER.warning("Skipping failed download for %s: %s%s", video.id, exc, output)
                     continue
+        context.metadata["download_summary"] = _download_summary(
+            candidates=candidates,
+            downloaded=downloaded,
+            failed=failed,
+            attempted_count=attempts,
+            max_attempts=max_attempts,
+            min_downloads_for_upload=self.settings.min_download_videos_for_upload,
+            max_download_videos=self.settings.max_download_videos,
+            backend=self.settings.download_backend,
+        )
         min_downloads = max(1, self.settings.min_download_videos_for_upload)
         if len(downloaded) < min_downloads:
             if failed:
@@ -846,9 +905,10 @@ class DownloadVideosStage(PipelineStage):
             if not self.settings.fail_on_no_source_downloads:
                 LOGGER.warning(
                     "Only %s source video(s) could be downloaded; minimum for upload is %s. "
-                    "Continuing as a skipped media run.",
+                    "Continuing as a skipped media run. Failure summary: %s",
                     len(downloaded),
                     min_downloads,
+                    context.metadata.get("download_summary", {}),
                 )
                 context.analyzed_videos = []
                 return context

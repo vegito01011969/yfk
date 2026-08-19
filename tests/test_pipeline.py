@@ -469,6 +469,9 @@ def test_download_stage_can_continue_when_no_downloads_succeed(tmp_path: Path) -
     context = DownloadVideosStage(settings, AlwaysFailProvider()).run(context)
 
     assert context.analyzed_videos == []
+    assert context.metadata["download_summary"]["downloaded_count"] == 0
+    assert context.metadata["download_summary"]["failed_count"] == 1
+    assert context.metadata["download_summary"]["error_counts"] == {"video-1": 1}
     history = SourceHistory(settings.source_history_path)._data()
     assert history["videos"]["video-1"]["stage"] == "download_failed"
 
@@ -514,6 +517,9 @@ def test_download_stage_skips_when_below_minimum_downloads(tmp_path: Path) -> No
     context = DownloadVideosStage(settings, OneSuccessProvider()).run(context)
 
     assert context.analyzed_videos == []
+    assert context.metadata["download_summary"]["downloaded_count"] == 1
+    assert context.metadata["download_summary"]["failed_count"] == 2
+    assert context.metadata["download_summary"]["downloaded_ids"] == ["video-1"]
     history = SourceHistory(settings.source_history_path)._data()
     assert history["videos"]["video-1"]["stage"] == "downloaded_below_publish_minimum"
     assert history["videos"]["video-2"]["stage"] == "download_failed"

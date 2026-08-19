@@ -156,6 +156,7 @@ class YouTubeUploadResult(BaseModel):
 class PipelineContext(BaseModel):
     run_id: str
     workdir: Path
+    metadata: dict[str, Any] = Field(default_factory=dict)
     trends: list[Trend] = Field(default_factory=list)
     selected_trends: list[Trend] = Field(default_factory=list)
     videos: list[YouTubeVideo] = Field(default_factory=list)
