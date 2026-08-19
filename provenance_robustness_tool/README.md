@@ -1,6 +1,6 @@
 # Video Robustness Transform Tool
 
-Local CLI for generating one randomized, perceptually close derivative of a video for provenance and traceability robustness testing.
+Local CLI for generating one randomized, perceptually similar derivative of a video for provenance and traceability robustness testing.
 
 This tool is intended for authorized evaluation of provenance systems. It does not target or optimize against any specific detector, watermark, or traceability system.
 
@@ -83,11 +83,11 @@ It validates the output for:
 - duration drift
 - expected audio presence
 - valid video dimensions
-- sampled SSIM perceptual similarity
+- sampled SSIM perceptual similarity with enough tolerance for visibly transformed-but-similar outputs
 - changed file hash
 - minimum technical-difference score across timing, size, frame-rate, codec, and container characteristics
 
-If validation fails, it retries with a new transform plan. Later attempts bias toward safer perceptual-close settings, and the final attempt uses a conservative validation-rescue profile that preserves geometry while still re-encoding, retiming, remuxing, and lightly adjusting audio/video. Intermediate files are cleaned automatically.
+If validation fails, it retries with a new transform plan. Early attempts now bias toward stronger perceptual-shift and representation-heavy profiles. Later attempts bias toward safer perceptual-close settings, and the final attempt uses a conservative validation-rescue profile that preserves geometry while still re-encoding, retiming, remuxing, and lightly adjusting audio/video. Intermediate files are cleaned automatically.
 
 The debug JSON records the selected stress profile, every randomized parameter, every validation attempt, sampled SSIM, duration drift, file-size delta, frame-rate delta, and the technical-difference score. Keep that file with test results if you need reproducibility.
 

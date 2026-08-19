@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 MAX_ATTEMPTS = 6
-MIN_SSIM_SAMPLE = 0.75
+MIN_SSIM_SAMPLE = 0.68
 
 
 @dataclass(frozen=True)
@@ -66,6 +66,7 @@ class TransformPlan:
     chroma_shift_cr_v: int
     gradfun_strength: float
     gradfun_radius: int
+    edge_matte_px: int
     denoise_luma: float
     denoise_chroma: float
     noise_strength: int
@@ -158,20 +159,37 @@ PROFILES = (
     ),
     TransformProfile(
         name="representation_heavy",
-        crop_pct_range=(0.012, 0.032),
-        rotate_abs_max=0.26,
-        fps_jitter_choices=(-0.3, -0.2, -0.1, 0.1, 0.2, 0.3),
-        speed_range=(0.9965, 1.0035),
-        brightness_range=(-0.016, 0.016),
-        contrast_range=(0.98, 1.035),
-        saturation_range=(0.98, 1.05),
-        gamma_range=(0.986, 1.02),
-        hue_abs_max=1.6,
-        denoise_luma_range=(0.25, 0.75),
-        denoise_chroma_range=(0.2, 0.6),
-        noise_strength_range=(2, 4),
-        unsharp_range=(0.1, 0.28),
-        crf_range=(20, 25),
+        crop_pct_range=(0.018, 0.046),
+        rotate_abs_max=0.42,
+        fps_jitter_choices=(-0.5, -0.35, -0.2, 0.2, 0.35, 0.5),
+        speed_range=(0.992, 1.008),
+        brightness_range=(-0.028, 0.028),
+        contrast_range=(0.955, 1.06),
+        saturation_range=(0.94, 1.09),
+        gamma_range=(0.97, 1.035),
+        hue_abs_max=3.2,
+        denoise_luma_range=(0.35, 0.95),
+        denoise_chroma_range=(0.3, 0.8),
+        noise_strength_range=(3, 6),
+        unsharp_range=(0.06, 0.34),
+        crf_range=(21, 27),
+    ),
+    TransformProfile(
+        name="perceptual_shift",
+        crop_pct_range=(0.026, 0.064),
+        rotate_abs_max=0.58,
+        fps_jitter_choices=(-0.75, -0.5, -0.25, 0.25, 0.5, 0.75),
+        speed_range=(0.988, 1.012),
+        brightness_range=(-0.04, 0.04),
+        contrast_range=(0.93, 1.085),
+        saturation_range=(0.9, 1.14),
+        gamma_range=(0.955, 1.05),
+        hue_abs_max=4.5,
+        denoise_luma_range=(0.45, 1.15),
+        denoise_chroma_range=(0.36, 0.95),
+        noise_strength_range=(4, 8),
+        unsharp_range=(0.04, 0.38),
+        crf_range=(22, 29),
     ),
 )
 
@@ -280,10 +298,10 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
     if attempt == MAX_ATTEMPTS:
         profile = VALIDATION_RESCUE_PROFILE
     elif attempt <= 2:
-        profile_weights = [0.15, 0.45, 0.40]
+        profile_weights = [0.05, 0.20, 0.35, 0.40]
         profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
     elif attempt <= 4:
-        profile_weights = [0.30, 0.55, 0.15]
+        profile_weights = [0.12, 0.36, 0.34, 0.18]
         profile = rng.choices(PROFILES, weights=profile_weights, k=1)[0]
     else:
         profile = PROFILES[0]
@@ -323,55 +341,56 @@ def build_plan(info: VideoInfo, seed: int, attempt: int) -> TransformPlan:
         scale_flags_primary=rng.choice(["lanczos", "bicubic", "spline", "area"]),
         scale_flags_final=rng.choice(["lanczos+accurate_rnd", "bicubic+accurate_rnd", "spline"]),
         rotate_degrees=rotate_degrees,
-        translate_x=rng.uniform(-0.45, 0.45),
-        translate_y=rng.uniform(-0.45, 0.45),
+        translate_x=rng.uniform(-1.35, 1.35),
+        translate_y=rng.uniform(-1.35, 1.35),
         fps=target_fps,
         brightness=rng.uniform(*profile.brightness_range),
         contrast=rng.uniform(*profile.contrast_range),
         saturation=rng.uniform(*profile.saturation_range),
         gamma=rng.uniform(*profile.gamma_range),
         hue_degrees=rng.uniform(-profile.hue_abs_max, profile.hue_abs_max),
-        channel_rr=rng.uniform(0.997, 1.004),
-        channel_gg=rng.uniform(0.997, 1.004),
-        channel_bb=rng.uniform(0.997, 1.004),
-        channel_rg=rng.uniform(-0.0025, 0.0025),
-        channel_gb=rng.uniform(-0.0025, 0.0025),
-        channel_br=rng.uniform(-0.0025, 0.0025),
-        chroma_shift_cb_h=rng.choice([-1, 0, 0, 0, 1]),
-        chroma_shift_cb_v=rng.choice([-1, 0, 0, 0, 1]),
-        chroma_shift_cr_h=rng.choice([-1, 0, 0, 0, 1]),
-        chroma_shift_cr_v=rng.choice([-1, 0, 0, 0, 1]),
-        gradfun_strength=rng.uniform(0.55, 0.9),
+        channel_rr=rng.uniform(0.988, 1.014),
+        channel_gg=rng.uniform(0.988, 1.014),
+        channel_bb=rng.uniform(0.988, 1.014),
+        channel_rg=rng.uniform(-0.008, 0.008),
+        channel_gb=rng.uniform(-0.008, 0.008),
+        channel_br=rng.uniform(-0.008, 0.008),
+        chroma_shift_cb_h=rng.choice([-2, -1, 0, 0, 1, 2]),
+        chroma_shift_cb_v=rng.choice([-2, -1, 0, 0, 1, 2]),
+        chroma_shift_cr_h=rng.choice([-2, -1, 0, 0, 1, 2]),
+        chroma_shift_cr_v=rng.choice([-2, -1, 0, 0, 1, 2]),
+        gradfun_strength=rng.uniform(0.6, 1.35),
         gradfun_radius=rng.choice([8, 12, 16]),
+        edge_matte_px=rng.choice([0, 0, 2, 3, 4, 6, 8]),
         denoise_luma=rng.uniform(*profile.denoise_luma_range),
         denoise_chroma=rng.uniform(*profile.denoise_chroma_range),
         noise_strength=rng.randint(*profile.noise_strength_range),
         grain_mix_frames=rng.choice([1, 1, 2]),
         unsharp_amount=rng.uniform(*profile.unsharp_range),
         speed=speed,
-        audio_volume_db=rng.uniform(-0.7, 0.7),
-        audio_highpass_hz=rng.randint(18, 35),
-        audio_lowpass_hz=rng.randint(17500, 20500),
-        audio_compressor_threshold_db=rng.uniform(-22.0, -16.0),
-        audio_compressor_ratio=rng.uniform(1.08, 1.28),
+        audio_volume_db=rng.uniform(-1.4, 1.4),
+        audio_highpass_hz=rng.randint(16, 55),
+        audio_lowpass_hz=rng.randint(14500, 20500),
+        audio_compressor_threshold_db=rng.uniform(-25.0, -14.0),
+        audio_compressor_ratio=rng.uniform(1.08, 1.55),
         audio_eq_frequency_hz=rng.choice([180, 240, 320, 3600, 5200, 7200]),
-        audio_eq_gain_db=rng.uniform(-0.9, 0.9),
+        audio_eq_gain_db=rng.uniform(-1.8, 1.8),
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
         x264_profile=rng.choice(["main", "high"]),
         x264_level=rng.choice(["4.0", "4.1", "4.2", "5.0"]),
         video_bitrate=None,
-        audio_bitrate=rng.choice(["128k", "160k", "192k"]),
+        audio_bitrate=rng.choice(["96k", "112k", "128k", "160k", "192k"]),
         audio_dither_method=rng.choice(["triangular", "triangular_hp", "lipshitz", "shibata"]),
         gop=max(24, int(target_fps * rng.uniform(1.7, 3.5))),
         bframes=rng.randint(2, 5),
         refs=rng.randint(2, 5),
-        aq_strength=rng.uniform(0.75, 1.15),
-        deblock_alpha=rng.randint(-2, 2),
-        deblock_beta=rng.randint(-2, 2),
-        psy_rd=rng.uniform(0.82, 1.18),
-        psy_trellis=rng.uniform(0.02, 0.18),
+        aq_strength=rng.uniform(0.55, 1.35),
+        deblock_alpha=rng.randint(-4, 4),
+        deblock_beta=rng.randint(-4, 4),
+        psy_rd=rng.uniform(0.65, 1.35),
+        psy_trellis=rng.uniform(0.0, 0.28),
         trellis=rng.randint(1, 2),
         rc_lookahead=rng.randint(24, 60),
         video_track_timescale=rng.choice([24000, 30000, 60000, 90000]),
@@ -445,6 +464,10 @@ def video_filter(plan: TransformPlan) -> str:
             "setsar=1",
         ]
     )
+    if plan.edge_matte_px:
+        filters.append(
+            f"drawbox=x=0:y=0:w=iw:h=ih:color=black@0.18:t={plan.edge_matte_px}"
+        )
     return ",".join(filters)
 
 
