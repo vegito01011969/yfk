@@ -12,7 +12,7 @@ concurrency:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
       actions: write
@@ -31,8 +31,8 @@ jobs:
       MAX_DOWNLOAD_STAGE_SECONDS: "900"
       MIN_DOWNLOAD_VIDEOS_FOR_UPLOAD: "2"
       FAIL_ON_NO_SOURCE_DOWNLOADS: "false"
-      PIPELINE_UPLOAD_ATTEMPTS: "1"
-      PIPELINE_ATTEMPT_TIMEOUT_SECONDS: "1200"
+      PIPELINE_UPLOAD_ATTEMPTS: "3"
+      PIPELINE_ATTEMPT_TIMEOUT_SECONDS: "900"
       PIPELINE_REQUIRE_UPLOAD: "true"
       ENABLE_YOUTUBE_UPLOAD: "true"
       YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"
