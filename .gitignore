@@ -16,6 +16,8 @@ secrets/
 # Local yt-dlp/cookie exports and accidental root-level media downloads
 /cookies.txt
 /cookies.base64
+/youtube_cookies.txt
+/YOUTUBE_COOKIES_TXT
 /*.mp4
 /*.webm
 /*.mkv

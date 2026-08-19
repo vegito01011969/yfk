@@ -73,14 +73,12 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install ffmpeg if needed
-        timeout-minutes: 6
+      - name: Set up static ffmpeg
+        timeout-minutes: 8
         run: |
           if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
-            sudo apt-get install -y --no-install-recommends ffmpeg || {
-              sudo apt-get update -y
-              sudo apt-get install -y --no-install-recommends ffmpeg
-            }
+            python -m pip install "static-ffmpeg==2.13"
+            python scripts/setup_static_ffmpeg.py
           fi
           command -v ffmpeg
           command -v ffprobe
