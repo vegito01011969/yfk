@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import wave
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,35 @@ class TransformPlan:
     audio_flanger_depth_ms: float
     audio_flanger_width: float
     audio_flanger_speed: float
+    audio_haas_enabled: bool
+    audio_haas_left_delay_ms: float
+    audio_haas_right_delay_ms: float
+    audio_haas_side_gain: float
+    audio_crossfeed_enabled: bool
+    audio_crossfeed_strength: float
+    audio_crossfeed_range: float
+    audio_dynamic_eq_enabled: bool
+    audio_dynamic_eq_frequency_hz: int
+    audio_dynamic_eq_ratio: float
+    audio_dynamic_eq_range: float
+    audio_dynamic_eq_mode: str
+    audio_rubberband_enabled: bool
+    audio_rubberband_tempo: float
+    audio_rubberband_pitch: float
+    audio_crusher_enabled: bool
+    audio_crusher_bits: float
+    audio_crusher_samples: float
+    audio_crusher_mix: float
+    audio_dynaudnorm_enabled: bool
+    audio_dynaudnorm_frame_ms: int
+    audio_dynaudnorm_compress: float
+    audio_speechnorm_enabled: bool
+    audio_room_enabled: bool
+    audio_room_wet: float
+    audio_room_decay: float
+    audio_room_tail_ms: int
+    audio_bed_noise_amplitude: float
+    audio_bed_mod_frequency_hz: float
     crf: int
     preset: str
     tune: str | None
@@ -161,6 +191,7 @@ class TransformPlan:
     movflags: str
     metadata_padding_bytes: int
     codec_generations: list[str]
+    audio_codec_generations: list[str]
 
 
 @dataclass(frozen=True)
@@ -450,6 +481,17 @@ def build_plan(
                 ["libx265", "libx264"],
             ]
         )
+    audio_codec_generations: list[str] = []
+    if stress_level >= 4 and profile.name != VALIDATION_RESCUE_PROFILE.name:
+        audio_codec_generations = rng.choice(
+            [
+                [],
+                ["libmp3lame"],
+                ["libopus"],
+                ["aac", "libmp3lame"],
+                ["libmp3lame", "libopus"],
+            ]
+        )
     operations = [
         {"category": "benchmark", "name": f"level_{stress_level}", "severity": stress_level},
         {
@@ -514,6 +556,14 @@ def build_plan(
                 "severity": codec_generations,
             }
         )
+    if audio_codec_generations:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "audio_codec_round_trip",
+                "severity": audio_codec_generations,
+            }
+        )
     if stress_level >= 2:
         operations.append(
             {
@@ -553,6 +603,21 @@ def build_plan(
                 "severity": "medium",
             }
         )
+        operations.append(
+            {
+                "category": "audio",
+                "name": "room_convolution_spatial_codec_texture",
+                "severity": "high",
+            }
+        )
+    if stress_level >= 5:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "rubberband_dynamic_eq_bit_sample_stress",
+                "severity": "high",
+            }
+        )
     audio_pitch_span = 0.0 if stress_level < 2 else 0.006 + stress_level * 0.0028
     audio_pitch_factor = rng.uniform(1.0 - audio_pitch_span, 1.0 + audio_pitch_span)
     audio_sample_rate = rng.choice(
@@ -577,6 +642,19 @@ def build_plan(
         audio_hum_amplitude = rng.choice([0.0, rng.uniform(0.0005, 0.0025)])
         audio_tone_amplitude = rng.choice([0.0, 0.0, rng.uniform(0.00035, 0.0016)])
     audio_flanger_enabled = stress_level >= 4 and rng.random() < 0.55
+    audio_haas_enabled = stress_level >= 3 and rng.random() < 0.72
+    audio_crossfeed_enabled = stress_level >= 4 and rng.random() < 0.55
+    audio_dynamic_eq_enabled = stress_level >= 4 and rng.random() < 0.78
+    audio_rubberband_enabled = stress_level >= 5 and rng.random() < 0.72
+    audio_crusher_enabled = stress_level >= 4 and rng.random() < 0.58
+    audio_dynaudnorm_enabled = stress_level >= 3 and rng.random() < 0.72
+    audio_speechnorm_enabled = stress_level >= 5 and rng.random() < 0.42
+    audio_room_enabled = stress_level >= 4 and rng.random() < 0.80
+    audio_bed_noise_amplitude = 0.0
+    if stress_level >= 4:
+        audio_bed_noise_amplitude = rng.uniform(0.00035, 0.0023)
+    if stress_level >= 6:
+        audio_bed_noise_amplitude = rng.uniform(0.0008, 0.0040)
 
     return TransformPlan(
         seed=seed,
@@ -667,7 +745,7 @@ def build_plan(
             ]
         ),
         audio_limiter_level=rng.uniform(0.82, 0.98),
-        audio_tremolo_rate_hz=rng.uniform(0.08, 0.55),
+        audio_tremolo_rate_hz=rng.uniform(0.10, 0.55),
         audio_tremolo_depth=0.0 if stress_level < 3 else rng.uniform(0.006, 0.035),
         audio_noise_color=rng.choice(["white", "pink", "brown"]),
         audio_noise_amplitude=audio_noise_amplitude,
@@ -695,6 +773,35 @@ def build_plan(
         audio_flanger_depth_ms=rng.uniform(0.4, 2.8),
         audio_flanger_width=rng.uniform(8.0, 26.0),
         audio_flanger_speed=rng.uniform(0.10, 0.42),
+        audio_haas_enabled=audio_haas_enabled,
+        audio_haas_left_delay_ms=rng.uniform(1.2, 9.5),
+        audio_haas_right_delay_ms=rng.uniform(1.2, 11.5),
+        audio_haas_side_gain=rng.uniform(0.55, 1.38),
+        audio_crossfeed_enabled=audio_crossfeed_enabled,
+        audio_crossfeed_strength=rng.uniform(0.08, 0.36),
+        audio_crossfeed_range=rng.uniform(0.18, 0.78),
+        audio_dynamic_eq_enabled=audio_dynamic_eq_enabled,
+        audio_dynamic_eq_frequency_hz=rng.choice([180, 260, 420, 900, 1800, 3200, 5200]),
+        audio_dynamic_eq_ratio=rng.uniform(0.35, 2.4),
+        audio_dynamic_eq_range=rng.uniform(2.0, 9.0),
+        audio_dynamic_eq_mode=rng.choice(["cutbelow", "cutabove", "boostbelow", "boostabove"]),
+        audio_rubberband_enabled=audio_rubberband_enabled,
+        audio_rubberband_tempo=rng.uniform(0.992, 1.010),
+        audio_rubberband_pitch=rng.uniform(0.982, 1.022),
+        audio_crusher_enabled=audio_crusher_enabled,
+        audio_crusher_bits=rng.uniform(10.5, 15.5),
+        audio_crusher_samples=rng.uniform(1.0, 2.8),
+        audio_crusher_mix=rng.uniform(0.018, 0.085),
+        audio_dynaudnorm_enabled=audio_dynaudnorm_enabled,
+        audio_dynaudnorm_frame_ms=rng.choice([80, 120, 160, 240, 320]),
+        audio_dynaudnorm_compress=rng.uniform(1.2, 5.0),
+        audio_speechnorm_enabled=audio_speechnorm_enabled,
+        audio_room_enabled=audio_room_enabled,
+        audio_room_wet=rng.uniform(0.035, 0.16),
+        audio_room_decay=rng.uniform(0.18, 0.58),
+        audio_room_tail_ms=rng.choice([55, 80, 110, 150, 220]),
+        audio_bed_noise_amplitude=audio_bed_noise_amplitude,
+        audio_bed_mod_frequency_hz=rng.uniform(0.10, 0.18),
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
@@ -717,6 +824,7 @@ def build_plan(
         movflags=rng.choice(["+faststart", "+faststart+use_metadata_tags"]),
         metadata_padding_bytes=rng.choice([0, 4096, 8192, 16384]),
         codec_generations=codec_generations,
+        audio_codec_generations=audio_codec_generations,
     )
 
 
@@ -921,6 +1029,66 @@ def audio_filter(plan: TransformPlan) -> str:
         "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20",
         f"volume={plan.audio_volume_db:.3f}dB",
     ]
+    if plan.audio_dynamic_eq_enabled:
+        filters.append(
+            "adynamicequalizer="
+            f"threshold=0:"
+            f"dfrequency={plan.audio_dynamic_eq_frequency_hz}:"
+            "dqfactor=1.6:"
+            f"tfrequency={plan.audio_dynamic_eq_frequency_hz}:"
+            "tqfactor=1.2:"
+            "attack=18:release=180:"
+            f"ratio={plan.audio_dynamic_eq_ratio:.5f}:"
+            f"range={plan.audio_dynamic_eq_range:.5f}:"
+            f"mode={plan.audio_dynamic_eq_mode}:"
+            "auto=adaptive"
+        )
+    if plan.audio_dynaudnorm_enabled:
+        filters.append(
+            "dynaudnorm="
+            f"f={plan.audio_dynaudnorm_frame_ms}:"
+            "g=15:p=0.92:m=6:"
+            f"s={plan.audio_dynaudnorm_compress:.5f}:"
+            "t=0.012:c=1"
+        )
+    if plan.audio_speechnorm_enabled:
+        filters.append(
+            "speechnorm=p=0.90:e=1.45:c=1.35:t=0.012:r=0.0007:f=0.0009:l=1"
+        )
+    if plan.audio_crossfeed_enabled:
+        filters.append(
+            "crossfeed="
+            f"strength={plan.audio_crossfeed_strength:.5f}:"
+            f"range={plan.audio_crossfeed_range:.5f}:"
+            "slope=0.55:level_in=0.92:level_out=1"
+        )
+    if plan.audio_haas_enabled:
+        filters.append(
+            "haas="
+            "level_in=0.94:level_out=0.96:"
+            f"side_gain={plan.audio_haas_side_gain:.5f}:"
+            f"left_delay={plan.audio_haas_left_delay_ms:.5f}:"
+            f"right_delay={plan.audio_haas_right_delay_ms:.5f}:"
+            "left_balance=-0.82:right_balance=0.82:"
+            "middle_source=mid:middle_phase=false:right_phase=true"
+        )
+    if plan.audio_rubberband_enabled:
+        filters.append(
+            "rubberband="
+            f"tempo={plan.audio_rubberband_tempo:.8f}:"
+            f"pitch={plan.audio_rubberband_pitch:.8f}:"
+            "transients=mixed:detector=compound:phase=independent:"
+            "window=short:smoothing=on:formant=preserved:pitchq=quality:channels=together"
+        )
+    if plan.audio_crusher_enabled:
+        filters.append(
+            "acrusher="
+            "level_in=1:level_out=1:"
+            f"bits={plan.audio_crusher_bits:.5f}:"
+            f"samples={plan.audio_crusher_samples:.5f}:"
+            f"mix={plan.audio_crusher_mix:.5f}:"
+            "mode=log:aa=0.82:lfo=1:lforange=3:lforate=0.11"
+        )
     if plan.audio_tremolo_depth:
         filters.append(
             f"tremolo=f={plan.audio_tremolo_rate_hz:.5f}:d={plan.audio_tremolo_depth:.5f}"
@@ -967,9 +1135,71 @@ def audio_filter(plan: TransformPlan) -> str:
     return ",".join(filters)
 
 
-def audio_filter_graph(plan: TransformPlan, duration_seconds: float) -> str:
+def write_audio_impulse_response(path: Path, plan: TransformPlan) -> None:
+    sample_rate = 48000
+    sample_count = max(128, int(sample_rate * plan.audio_room_tail_ms / 1000))
+    rng = random.Random(plan.seed ^ (plan.attempt * 104729) ^ 0xA17D10)
+    taps = [
+        0,
+        int(sample_rate * rng.uniform(0.006, 0.018)),
+        int(sample_rate * rng.uniform(0.024, 0.055)),
+    ]
+    max_amp = 0.78
+    frames = bytearray()
+    for index in range(sample_count):
+        envelope = math.exp(-index / max(1.0, sample_count * plan.audio_room_decay))
+        left = 0.0
+        right = 0.0
+        if index == 0:
+            left += 1.0
+            right += 1.0
+        for tap_number, tap in enumerate(taps[1:], start=1):
+            if index == tap:
+                amp = envelope * rng.uniform(0.22, 0.52) / tap_number
+                left += amp
+                right += amp * rng.uniform(0.72, 1.18)
+        if index > taps[0] and rng.random() < 0.18:
+            noise = envelope * rng.uniform(-0.018, 0.018)
+            left += noise
+            right -= noise * rng.uniform(0.35, 0.85)
+        left_int = int(max(-1.0, min(1.0, left * max_amp)) * 32767)
+        right_int = int(max(-1.0, min(1.0, right * max_amp)) * 32767)
+        frames.extend(left_int.to_bytes(2, "little", signed=True))
+        frames.extend(right_int.to_bytes(2, "little", signed=True))
+
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(bytes(frames))
+
+
+def audio_filter_graph(
+    plan: TransformPlan,
+    duration_seconds: float,
+    ir_input_index: int | None = None,
+) -> str:
     duration = max(0.5, duration_seconds + 2.0)
-    parts = [f"[0:a:0]{audio_filter(plan)}[a0]"]
+    parts = [f"[0:a:0]{audio_filter(plan)}[a0base]"]
+    if ir_input_index is not None:
+        parts.extend(
+            [
+                (
+                    f"[{ir_input_index}:a:0]"
+                    "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                    "aresample=48000:async=1:first_pts=0[air]"
+                ),
+                (
+                    "[a0base][air]"
+                    f"afir=dry=1:wet={plan.audio_room_wet:.5f}:"
+                    "gtype=none:irfmt=input:maxir=1:precision=float,"
+                    f"alimiter=level_in=1:level_out={plan.audio_limiter_level:.5f}:limit=0.98"
+                    "[a0]"
+                ),
+            ]
+        )
+    else:
+        parts.append("[a0base]anull[a0]")
     mix_inputs = ["[a0]"]
     if plan.audio_noise_amplitude:
         parts.append(
@@ -998,6 +1228,17 @@ def audio_filter_graph(plan: TransformPlan, duration_seconds: float) -> str:
             "asetpts=PTS-STARTPTS[atone]"
         )
         mix_inputs.append("[atone]")
+    if plan.audio_bed_noise_amplitude:
+        parts.append(
+            "anoisesrc="
+            "color=violet:"
+            f"amplitude={plan.audio_bed_noise_amplitude:.7f}:"
+            f"sample_rate=48000:duration={duration:.5f},"
+            "highpass=f=180,lowpass=f=6200,"
+            f"tremolo=f={plan.audio_bed_mod_frequency_hz:.6f}:d=0.45,"
+            "asetpts=PTS-STARTPTS[abed]"
+        )
+        mix_inputs.append("[abed]")
     if len(mix_inputs) == 1:
         parts.append("[a0]anull[aout]")
     else:
@@ -1055,6 +1296,66 @@ def transcode_generation(
     run(command)
 
 
+def audio_codec_generation(
+    input_path: Path,
+    output_path: Path,
+    codec: str,
+    plan: TransformPlan,
+    generation: int,
+) -> None:
+    bitrate = {
+        "libopus": "80k",
+        "libmp3lame": "112k",
+        "aac": plan.audio_bitrate,
+    }.get(codec, plan.audio_bitrate)
+    command = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-i",
+        str(input_path),
+        "-map_metadata",
+        "-1",
+        "-map_chapters",
+        "-1",
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "copy",
+        "-map",
+        "0:a?",
+        "-c:a",
+        codec,
+    ]
+    if codec == "libopus":
+        command.extend(
+            [
+                "-application",
+                "audio",
+                "-vbr",
+                "on",
+                "-compression_level",
+                "10",
+            ]
+        )
+    elif codec == "libmp3lame":
+        command.extend(["-compression_level", str(min(6, 2 + generation))])
+    command.extend(
+        [
+            "-b:a",
+            bitrate,
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-avoid_negative_ts",
+            "make_zero",
+            str(output_path),
+        ]
+    )
+    run(command)
+
+
 def transform_once(
     input_path: Path,
     output_path: Path,
@@ -1070,24 +1371,44 @@ def transform_once(
         transcode_generation(source_path, generation_path, codec, plan, generation)
         generation_paths.append(generation_path)
         source_path = generation_path
+    if info.has_audio:
+        for generation, codec in enumerate(plan.audio_codec_generations, start=1):
+            generation_path = output_path.with_name(
+                f"{output_path.stem}.audio_generation_{generation}.mkv"
+            )
+            audio_codec_generation(source_path, generation_path, codec, plan, generation)
+            generation_paths.append(generation_path)
+            source_path = generation_path
+    ir_path: Path | None = None
+    if info.has_audio and plan.audio_room_enabled:
+        ir_path = output_path.with_name(f"{output_path.stem}.room_ir.wav")
+        write_audio_impulse_response(ir_path, plan)
     command = [
         "ffmpeg",
         "-y",
         "-hide_banner",
         "-i",
         str(source_path),
+    ]
+    ir_input_index: int | None = None
+    if ir_path is not None:
+        command.extend(["-i", str(ir_path)])
+        ir_input_index = 1
+    command.extend(
+        [
         "-map_metadata",
         "-1",
         "-map_chapters",
         "-1",
-    ]
+        ]
+    )
     if info.has_audio:
         command.extend(
             [
                 "-filter_complex",
                 (
                     f"[0:v:0]{video_filter(plan)}[vout];"
-                    f"{audio_filter_graph(plan, info.duration)}"
+                    f"{audio_filter_graph(plan, info.duration, ir_input_index=ir_input_index)}"
                 ),
                 "-map",
                 "[vout]",
@@ -1164,6 +1485,8 @@ def transform_once(
     try:
         run(command)
     finally:
+        if ir_path is not None:
+            ir_path.unlink(missing_ok=True)
         for path in generation_paths:
             path.unlink(missing_ok=True)
 
