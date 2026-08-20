@@ -889,9 +889,15 @@ class DownloadVideosStage(PipelineStage):
         )
         min_downloads = max(1, self.settings.min_download_videos_for_upload)
         if len(downloaded) < min_downloads:
-            if failed:
+            history_eligible_failures = [
+                video
+                for video in failed
+                if video.metadata.get("download_error_kind")
+                not in {"youtube_bot_wall", "download_infrastructure_error"}
+            ]
+            if history_eligible_failures:
                 SourceHistory(self.settings.source_history_path).mark_videos_seen(
-                    failed,
+                    history_eligible_failures,
                     run_id=context.run_id,
                     query=query,
                     language=language,

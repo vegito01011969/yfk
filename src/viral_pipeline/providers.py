@@ -42,6 +42,12 @@ def _is_youtube_bot_wall_text(text: str) -> bool:
     haystack = text.lower()
     return all(marker in haystack for marker in YOUTUBE_BOT_WALL_MARKERS)
 
+
+def _called_process_output(exc: subprocess.CalledProcessError | subprocess.TimeoutExpired) -> str:
+    stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else exc.stdout
+    stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr
+    return "\n".join(part for part in (stdout, stderr) if part)
+
 STOPWORDS = {
     "about",
     "after",
@@ -1684,6 +1690,25 @@ class ColabYtDlpVideoDownloadProvider:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
+    def _failed_batch(
+        self,
+        videos: list[YouTubeVideo],
+        *,
+        error: str,
+        kind: str = "download_error",
+        stderr: str = "",
+    ) -> tuple[list[YouTubeVideo], list[YouTubeVideo]]:
+        failed: list[YouTubeVideo] = []
+        for video in videos:
+            failed_video = video.model_copy(deep=True)
+            failed_video.metadata["download_failed"] = True
+            failed_video.metadata["download_error"] = error
+            failed_video.metadata["download_error_kind"] = kind
+            if stderr:
+                failed_video.metadata["download_stderr"] = stderr[-2000:]
+            failed.append(failed_video)
+        return [], failed
+
     def download_many(
         self,
         videos: list[YouTubeVideo],
@@ -1725,42 +1750,52 @@ class ColabYtDlpVideoDownloadProvider:
         )
 
         try:
-            self._run(["new", "-s", session])
-            self._run(
-                ["exec", "-s", session],
-                input_text=(
-                    "import pathlib\n"
-                    f"pathlib.Path('{remote_dir}').mkdir(parents=True, exist_ok=True)\n"
-                ),
-            )
-            self._run(["upload", "-s", session, str(job_path), f"{remote_dir}/job.json"])
-            cookies_path = self.settings.yt_dlp_cookies_path
-            if (
-                self.settings.colab_upload_youtube_cookies
-                and cookies_path
-                and cookies_path.exists()
-            ):
-                self._run(["upload", "-s", session, str(cookies_path), f"{remote_dir}/cookies.txt"])
-            self._run(["upload", "-s", session, str(worker_path), f"{remote_dir}/worker.py"])
-            self._start_remote_worker(session, remote_dir)
-            result_ready = self._wait_for_remote_result(session, remote_dir)
-            if result_ready:
-                self._run(["download", "-s", session, f"{remote_dir}/result.zip", str(result_zip)])
-        finally:
             try:
-                self._run(["stop", "-s", session])
-            except subprocess.CalledProcessError as exc:
-                LOGGER.warning("Failed to stop Colab session %s: %s", session, exc)
+                self._run(["new", "-s", session])
+                self._run(
+                    ["exec", "-s", session],
+                    input_text=(
+                        "import pathlib\n"
+                        f"pathlib.Path('{remote_dir}').mkdir(parents=True, exist_ok=True)\n"
+                    ),
+                )
+                self._run(["upload", "-s", session, str(job_path), f"{remote_dir}/job.json"])
+                cookies_path = self.settings.yt_dlp_cookies_path
+                if (
+                    self.settings.colab_upload_youtube_cookies
+                    and cookies_path
+                    and cookies_path.exists()
+                ):
+                    self._run(
+                        ["upload", "-s", session, str(cookies_path), f"{remote_dir}/cookies.txt"]
+                    )
+                self._run(["upload", "-s", session, str(worker_path), f"{remote_dir}/worker.py"])
+                self._start_remote_worker(session, remote_dir)
+                result_ready = self._wait_for_remote_result(session, remote_dir)
+                if result_ready:
+                    self._run(
+                        ["download", "-s", session, f"{remote_dir}/result.zip", str(result_zip)]
+                    )
+            finally:
+                try:
+                    self._run(["stop", "-s", session])
+                except subprocess.CalledProcessError as exc:
+                    LOGGER.warning("Failed to stop Colab session %s: %s", session, exc)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            output = _called_process_output(exc)
+            return self._failed_batch(
+                videos,
+                error="colab_batch_command_failed",
+                kind="download_infrastructure_error",
+                stderr=output,
+            )
 
         if not result_zip.exists():
-            failed: list[YouTubeVideo] = []
-            for video in videos:
-                failed_video = video.model_copy(deep=True)
-                failed_video.metadata["download_failed"] = True
-                failed_video.metadata["download_error"] = "colab_batch_result_timeout"
-                failed_video.metadata["download_error_kind"] = "download_error"
-                failed.append(failed_video)
-            return [], failed
+            return self._failed_batch(
+                videos,
+                error="colab_batch_result_timeout",
+                kind="download_infrastructure_error",
+            )
         with zipfile.ZipFile(result_zip) as archive:
             archive.extractall(output_dir)
 

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import zipfile
+from importlib import util
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -58,6 +60,21 @@ def make_settings(tmp_path: Path) -> Settings:
         use_real_media=False,
         enable_youtube_upload=False,
     )
+
+
+def load_pipeline_retry_script():
+    scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
+    script_path = scripts_dir / "run_pipeline_until_upload.py"
+    spec = util.spec_from_file_location("run_pipeline_until_upload", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = util.module_from_spec(spec)
+    sys.path.insert(0, str(scripts_dir))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(scripts_dir))
+    return module
 
 
 def test_full_local_pipeline_persists_publish_package(tmp_path: Path) -> None:
@@ -649,6 +666,55 @@ def test_download_stage_uses_batch_downloader_when_available(tmp_path: Path) -> 
     assert history["videos"]["video-3"]["stage"] == "download_failed"
 
 
+def test_colab_batch_command_failure_returns_failed_videos(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    provider = ColabYtDlpVideoDownloadProvider(settings)
+    video = YouTubeVideo(
+        id="video-1",
+        trend_id="trend-1",
+        title="Football short",
+        url="https://www.youtube.com/watch?v=video-1",
+    )
+
+    def fail_run(args: list[str], input_text: str | None = None) -> subprocess.CompletedProcess:
+        raise subprocess.CalledProcessError(
+            1,
+            ["colab", *args],
+            stderr="ReadTimeout: Colab did not respond",
+        )
+
+    provider._run = fail_run  # type: ignore[method-assign]
+
+    downloaded, failed = provider.download_many([video], tmp_path / "downloads", max_successes=1)
+
+    assert downloaded == []
+    assert len(failed) == 1
+    assert failed[0].metadata["download_error"] == "colab_batch_command_failed"
+    assert failed[0].metadata["download_error_kind"] == "download_infrastructure_error"
+    assert "ReadTimeout" in failed[0].metadata["download_stderr"]
+
+
+def test_pipeline_retry_wrapper_detects_download_auth_block(tmp_path: Path) -> None:
+    retry_script = load_pipeline_retry_script()
+
+    blocked, reason = retry_script._download_auth_blocked(
+        {
+            "metadata": {
+                "download_summary": {
+                    "attempted_count": 10,
+                    "downloaded_count": 0,
+                    "failed_count": 10,
+                    "failure_counts": {"youtube_bot_wall": 10},
+                }
+            }
+        }
+    )
+
+    assert blocked is True
+    assert reason is not None
+    assert "bot-check wall" in reason
+
+
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 
@@ -687,6 +753,39 @@ def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
         assert "configured PO-token provider" in str(exc)
     else:
         raise AssertionError("download stage should report the YouTube bot wall")
+
+
+def test_download_stage_does_not_mark_bot_wall_failures_seen(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.fail_on_no_source_downloads = False
+
+    class BotWallProvider:
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            raise subprocess.CalledProcessError(
+                1,
+                ["yt-dlp", video.url],
+                stderr="ERROR: Sign in to confirm you’re not a bot.",
+            )
+
+    context = PipelineContext(
+        run_id="download-bot-wall-skip-test",
+        workdir=tmp_path,
+        selected_trends=[Trend(title="football goals shorts", source="test")],
+        analyzed_videos=[
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Football short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+    )
+
+    context = DownloadVideosStage(settings, BotWallProvider()).run(context)
+
+    assert context.analyzed_videos == []
+    assert context.metadata["download_summary"]["failure_counts"] == {"youtube_bot_wall": 1}
+    assert SourceHistory(settings.source_history_path)._data()["videos"] == {}
 
 
 def test_clip_hash_distance_detects_exact_and_near_duplicates() -> None:

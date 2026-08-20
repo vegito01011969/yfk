@@ -26,6 +26,26 @@ def _upload_status(context: dict) -> tuple[str | None, str | None]:
     return upload.get("status"), reason
 
 
+def _download_auth_blocked(context: dict) -> tuple[bool, str | None]:
+    summary = context.get("metadata", {}).get("download_summary") or {}
+    if not isinstance(summary, dict):
+        return False, None
+    failure_counts = summary.get("failure_counts") or {}
+    attempted = int(summary.get("attempted_count") or 0)
+    downloaded = int(summary.get("downloaded_count") or 0)
+    failed = int(summary.get("failed_count") or 0)
+    bot_wall = int(failure_counts.get("youtube_bot_wall") or 0)
+    if attempted and downloaded == 0 and failed and bot_wall == failed:
+        return (
+            True,
+            (
+                "All attempted yt-dlp downloads hit YouTube's bot-check wall. "
+                "The current cookies/auth context is not accepted from the Colab runtime."
+            ),
+        )
+    return False, None
+
+
 def main() -> None:
     attempts = max(1, int(os.environ.get("PIPELINE_UPLOAD_ATTEMPTS", "3")))
     require_upload = os.environ.get("PIPELINE_REQUIRE_UPLOAD", "false").lower() == "true"
@@ -58,6 +78,11 @@ def main() -> None:
         print(f"Pipeline attempt {attempt} exit={last_return_code} upload_status={last_status}")
         if last_reason:
             print(f"Upload skip reason: {last_reason}")
+        auth_blocked, auth_reason = _download_auth_blocked(context)
+        if auth_blocked:
+            last_reason = auth_reason
+            print(f"Download auth blocked: {auth_reason}")
+            break
         if last_return_code == 0 and last_status == "uploaded":
             return
 
