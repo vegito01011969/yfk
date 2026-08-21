@@ -53,8 +53,10 @@ def main() -> None:
     last_return_code = 0
     last_status: str | None = None
     last_reason: str | None = None
+    attempts_run = 0
 
     for attempt in range(1, attempts + 1):
+        attempts_run = attempt
         attempt_reason: str | None = None
         print(f"Pipeline attempt {attempt}/{attempts}")
         process = subprocess.Popen(
@@ -89,7 +91,7 @@ def main() -> None:
     if require_upload:
         reason = f" Last skip reason: {last_reason}." if last_reason else ""
         raise SystemExit(
-            f"No video was uploaded after {attempts} pipeline attempt(s). "
+            f"No video was uploaded after {attempts_run} pipeline attempt(s). "
             f"Last upload status: {last_status or 'unknown'}.{reason}"
         )
     if last_return_code:
