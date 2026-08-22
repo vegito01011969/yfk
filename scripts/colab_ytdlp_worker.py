@@ -131,7 +131,7 @@ def _download_one(
     if js_runtime_arg:
         command.extend(["--js-runtimes", js_runtime_arg])
     extractor_args_values = job.get("extractor_args") or [
-        "youtube:player_client=mweb,web_safari,web_embedded,tv_simply,android_vr"
+        "youtube:player_client=tv_downgraded,tv_simply,web_embedded,android_vr,mweb,web_safari"
     ]
     if enable_browser_po_token and chrome_path:
         extractor_args_values.append(f"youtubepot-wpc:browser_path={chrome_path}")

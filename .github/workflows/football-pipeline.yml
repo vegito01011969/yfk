@@ -53,6 +53,7 @@ jobs:
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
       YT_DLP_COOKIES_PATH: secrets/youtube_cookies.txt
       YT_DLP_JS_RUNTIMES: node
+      YT_DLP_EXTRACTOR_ARGS: "youtube:player_client=tv_downgraded,tv_simply,web_embedded,android_vr,mweb,web_safari"
       YT_DLP_VERBOSE: "false"
       YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "90"
       COLAB_CLI_AUTH: adc
