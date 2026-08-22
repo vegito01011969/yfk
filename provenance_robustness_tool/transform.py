@@ -169,6 +169,7 @@ class TransformPlan:
     audio_room_tail_ms: int
     audio_bed_noise_amplitude: float
     audio_bed_mod_frequency_hz: float
+    audio_generated_layers: list[dict[str, Any]]
     crf: int
     preset: str
     tune: str | None
@@ -492,6 +493,63 @@ def build_plan(
                 ["libmp3lame", "libopus"],
             ]
         )
+    audio_generated_layers: list[dict[str, Any]] = []
+    if stress_level >= 3:
+        layer_count = rng.randint(1, 2)
+        if stress_level >= 5:
+            layer_count = rng.randint(2, 4)
+        for _ in range(layer_count):
+            kind = rng.choice(["air", "rumble", "tone", "texture"])
+            if kind == "air":
+                audio_generated_layers.append(
+                    {
+                        "kind": kind,
+                        "color": rng.choice(["white", "pink"]),
+                        "amplitude": rng.uniform(0.00015, 0.0011),
+                        "highpass_hz": rng.randint(1800, 4200),
+                        "lowpass_hz": rng.randint(7200, 15500),
+                        "tremolo_hz": rng.uniform(0.10, 0.32),
+                        "tremolo_depth": rng.uniform(0.18, 0.55),
+                        "volume_db": rng.uniform(-9.0, -2.5),
+                    }
+                )
+            elif kind == "rumble":
+                audio_generated_layers.append(
+                    {
+                        "kind": kind,
+                        "color": rng.choice(["brown", "pink"]),
+                        "amplitude": rng.uniform(0.00018, 0.0014),
+                        "highpass_hz": rng.randint(24, 80),
+                        "lowpass_hz": rng.randint(160, 520),
+                        "tremolo_hz": rng.uniform(0.10, 0.22),
+                        "tremolo_depth": rng.uniform(0.12, 0.42),
+                        "volume_db": rng.uniform(-10.0, -3.5),
+                    }
+                )
+            elif kind == "tone":
+                audio_generated_layers.append(
+                    {
+                        "kind": kind,
+                        "frequency_hz": rng.choice([73, 82, 98, 147, 196, 294, 523, 659]),
+                        "amplitude": rng.uniform(0.00008, 0.00065),
+                        "tremolo_hz": rng.uniform(0.10, 0.45),
+                        "tremolo_depth": rng.uniform(0.18, 0.70),
+                        "volume_db": rng.uniform(-12.0, -4.0),
+                    }
+                )
+            else:
+                audio_generated_layers.append(
+                    {
+                        "kind": kind,
+                        "color": rng.choice(["white", "pink", "violet"]),
+                        "amplitude": rng.uniform(0.00012, 0.0012),
+                        "highpass_hz": rng.randint(280, 1200),
+                        "lowpass_hz": rng.randint(2400, 6800),
+                        "tremolo_hz": rng.uniform(0.16, 0.85),
+                        "tremolo_depth": rng.uniform(0.22, 0.68),
+                        "volume_db": rng.uniform(-11.0, -3.0),
+                    }
+                )
     operations = [
         {"category": "benchmark", "name": f"level_{stress_level}", "severity": stress_level},
         {
@@ -562,6 +620,14 @@ def build_plan(
                 "category": "audio",
                 "name": "audio_codec_round_trip",
                 "severity": audio_codec_generations,
+            }
+        )
+    if audio_generated_layers:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "random_low_volume_synthetic_audio_layers",
+                "severity": len(audio_generated_layers),
             }
         )
     if stress_level >= 2:
@@ -802,6 +868,7 @@ def build_plan(
         audio_room_tail_ms=rng.choice([55, 80, 110, 150, 220]),
         audio_bed_noise_amplitude=audio_bed_noise_amplitude,
         audio_bed_mod_frequency_hz=rng.uniform(0.10, 0.18),
+        audio_generated_layers=audio_generated_layers,
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
@@ -1174,6 +1241,37 @@ def write_audio_impulse_response(path: Path, plan: TransformPlan) -> None:
         wav.writeframes(bytes(frames))
 
 
+def generated_audio_layer_filter(layer: dict[str, Any], duration: float, label: str) -> str:
+    kind = str(layer.get("kind") or "texture")
+    amplitude = float(layer.get("amplitude") or 0.0003)
+    tremolo_hz = max(0.10, float(layer.get("tremolo_hz") or 0.2))
+    tremolo_depth = max(0.0, min(0.95, float(layer.get("tremolo_depth") or 0.3)))
+    volume_db = float(layer.get("volume_db") or -6.0)
+    if kind == "tone":
+        frequency_hz = int(layer.get("frequency_hz") or 196)
+        return (
+            "sine="
+            f"frequency={frequency_hz}:sample_rate=48000:duration={duration:.5f},"
+            f"volume={amplitude:.7f},"
+            f"tremolo=f={tremolo_hz:.6f}:d={tremolo_depth:.5f},"
+            f"volume={volume_db:.5f}dB,"
+            f"asetpts=PTS-STARTPTS[{label}]"
+        )
+
+    color = str(layer.get("color") or "pink")
+    highpass_hz = int(layer.get("highpass_hz") or 160)
+    lowpass_hz = int(layer.get("lowpass_hz") or 6200)
+    return (
+        "anoisesrc="
+        f"color={color}:amplitude={amplitude:.7f}:"
+        f"sample_rate=48000:duration={duration:.5f},"
+        f"highpass=f={highpass_hz},lowpass=f={lowpass_hz},"
+        f"tremolo=f={tremolo_hz:.6f}:d={tremolo_depth:.5f},"
+        f"volume={volume_db:.5f}dB,"
+        f"asetpts=PTS-STARTPTS[{label}]"
+    )
+
+
 def audio_filter_graph(
     plan: TransformPlan,
     duration_seconds: float,
@@ -1239,6 +1337,10 @@ def audio_filter_graph(
             "asetpts=PTS-STARTPTS[abed]"
         )
         mix_inputs.append("[abed]")
+    for index, layer in enumerate(plan.audio_generated_layers):
+        label = f"alayer{index}"
+        parts.append(generated_audio_layer_filter(layer, duration, label))
+        mix_inputs.append(f"[{label}]")
     if len(mix_inputs) == 1:
         parts.append("[a0]anull[aout]")
     else:
