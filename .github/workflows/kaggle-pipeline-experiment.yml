@@ -89,7 +89,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install -e ".[media,ai]"
-          python -m pip install "kaggle"
+          python -m pip install "kaggle==1.6.17"
           python -m pip show yt-dlp kaggle
           kaggle --version
 
