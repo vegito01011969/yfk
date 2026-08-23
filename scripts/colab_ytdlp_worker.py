@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import zipfile
+from importlib import util
 from pathlib import Path
 
 REMOTE_DIR = Path("/content/viral_pipeline_download")
@@ -96,6 +97,27 @@ def _js_runtime_arg(configured: object, deno_path: Path | None) -> str | None:
         if "deno" not in configured_text:
             return f"{deno_arg},{configured_text}"
     return configured_text or None
+
+
+def _patch_wpc_provider_for_colab() -> str | None:
+    spec = util.find_spec("yt_dlp_plugins.extractor.getpot_wpc")
+    if not spec or not spec.origin:
+        return None
+    provider_path = Path(spec.origin)
+    text = provider_path.read_text(encoding="utf-8")
+    patched = text
+    if '"--no-sandbox"' not in patched:
+        patched = patched.replace(
+            "browser_args = []",
+            (
+                'browser_args = ["--no-sandbox", "--disable-dev-shm-usage", '
+                '"--disable-gpu"]'
+            ),
+        )
+    patched = patched.replace("headless=False,", "headless=True,")
+    if patched != text:
+        provider_path.write_text(patched, encoding="utf-8")
+    return str(provider_path)
 
 
 def _download_one(
@@ -188,7 +210,7 @@ def main() -> None:
     ]
     if enable_browser_po_token:
         install_commands.append(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp-getpot-wpc==1.0.0"]
+            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp-getpot-wpc==1.1.2"]
         )
     for install_command in install_commands:
         result = subprocess.run(install_command, check=False, capture_output=True, text=True)
@@ -205,6 +227,7 @@ def main() -> None:
 
     deno_path = _install_deno()
     chrome_path = _install_chrome() if enable_browser_po_token else None
+    wpc_patch_path = _patch_wpc_provider_for_colab() if enable_browser_po_token else None
     videos = job.get("videos")
     if not isinstance(videos, list):
         videos = [{"id": job["video_id"], "url": job["url"]}]
@@ -246,6 +269,7 @@ def main() -> None:
         "ok" if successes else "download_failed",
         deno_path=str(deno_path) if deno_path else None,
         chrome_path=str(chrome_path) if chrome_path else None,
+        wpc_patch_path=wpc_patch_path,
         successes=successes,
         results=results,
     )
