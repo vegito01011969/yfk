@@ -715,6 +715,27 @@ def test_pipeline_retry_wrapper_detects_download_auth_block(tmp_path: Path) -> N
     assert "bot-check wall" in reason
 
 
+def test_pipeline_retry_wrapper_detects_youtube_challenge_failure(tmp_path: Path) -> None:
+    retry_script = load_pipeline_retry_script()
+
+    blocked, reason = retry_script._download_auth_blocked(
+        {
+            "metadata": {
+                "download_summary": {
+                    "attempted_count": 3,
+                    "downloaded_count": 0,
+                    "failed_count": 3,
+                    "failure_counts": {"youtube_challenge_failed": 3},
+                }
+            }
+        }
+    )
+
+    assert blocked is True
+    assert reason is not None
+    assert "JS/PO-token challenge" in reason
+
+
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 
@@ -785,6 +806,44 @@ def test_download_stage_does_not_mark_bot_wall_failures_seen(tmp_path: Path) -> 
 
     assert context.analyzed_videos == []
     assert context.metadata["download_summary"]["failure_counts"] == {"youtube_bot_wall": 1}
+    assert SourceHistory(settings.source_history_path)._data()["videos"] == {}
+
+
+def test_download_stage_does_not_mark_challenge_failures_seen(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.fail_on_no_source_downloads = False
+
+    class ChallengeFailProvider:
+        def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+            raise subprocess.CalledProcessError(
+                1,
+                ["yt-dlp", video.url],
+                stderr=(
+                    "WARNING: n challenge solving failed\n"
+                    "ERROR: [youtube] video-1: The page needs to be reloaded."
+                ),
+            )
+
+    context = PipelineContext(
+        run_id="download-challenge-failure-skip-test",
+        workdir=tmp_path,
+        selected_trends=[Trend(title="football goals shorts", source="test")],
+        analyzed_videos=[
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Football short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+    )
+
+    context = DownloadVideosStage(settings, ChallengeFailProvider()).run(context)
+
+    assert context.analyzed_videos == []
+    assert context.metadata["download_summary"]["failure_counts"] == {
+        "youtube_challenge_failed": 1
+    }
     assert SourceHistory(settings.source_history_path)._data()["videos"] == {}
 
 

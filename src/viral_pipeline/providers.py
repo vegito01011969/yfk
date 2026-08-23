@@ -36,11 +36,27 @@ YOUTUBE_BOT_WALL_MARKERS = (
     "sign in to confirm you",
     "not a bot",
 )
+YOUTUBE_CHALLENGE_FAILURE_MARKERS = (
+    "challenge solving failed",
+    "the page needs to be reloaded",
+)
+YOUTUBE_WEBPO_FAILURE_MARKERS = (
+    "could not find webpoclient in browser",
+    "timed out waiting for webpoclient",
+)
 
 
 def _is_youtube_bot_wall_text(text: str) -> bool:
     haystack = text.lower()
     return all(marker in haystack for marker in YOUTUBE_BOT_WALL_MARKERS)
+
+
+def _is_youtube_challenge_failure_text(text: str) -> bool:
+    haystack = text.lower()
+    return (
+        all(marker in haystack for marker in YOUTUBE_CHALLENGE_FAILURE_MARKERS)
+        or any(marker in haystack for marker in YOUTUBE_WEBPO_FAILURE_MARKERS)
+    )
 
 
 def _called_process_output(exc: subprocess.CalledProcessError | subprocess.TimeoutExpired) -> str:
@@ -1834,13 +1850,14 @@ class ColabYtDlpVideoDownloadProvider:
             failed_video.metadata["download_failed"] = True
             failed_video.metadata["download_error"] = str(item.get("status") or "not_attempted")
             failed_video.metadata["download_stderr"] = str(item.get("stderr") or "")[-2000:]
-            failed_video.metadata["download_error_kind"] = (
-                "youtube_bot_wall"
-                if _is_youtube_bot_wall_text(
-                    " ".join(str(item.get(key) or "") for key in ("stdout", "stderr"))
-                )
-                else "download_error"
-            )
+            output_text = " ".join(str(item.get(key) or "") for key in ("stdout", "stderr"))
+            if _is_youtube_bot_wall_text(output_text):
+                error_kind = "youtube_bot_wall"
+            elif _is_youtube_challenge_failure_text(output_text):
+                error_kind = "youtube_challenge_failed"
+            else:
+                error_kind = "download_error"
+            failed_video.metadata["download_error_kind"] = error_kind
             failed.append(failed_video)
         return downloaded, failed
 

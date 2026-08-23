@@ -41,6 +41,14 @@ YOUTUBE_BOT_WALL_MARKERS = (
     "sign in to confirm you",
     "not a bot",
 )
+YOUTUBE_CHALLENGE_FAILURE_MARKERS = (
+    "challenge solving failed",
+    "the page needs to be reloaded",
+)
+YOUTUBE_WEBPO_FAILURE_MARKERS = (
+    "could not find webpoclient in browser",
+    "timed out waiting for webpoclient",
+)
 
 
 def _called_process_output(exc: subprocess.CalledProcessError) -> str:
@@ -57,6 +65,17 @@ def _is_youtube_bot_wall(exc: BaseException) -> bool:
     else:
         haystack = str(exc).lower()
     return all(marker in haystack for marker in YOUTUBE_BOT_WALL_MARKERS)
+
+
+def _is_youtube_challenge_failure(exc: BaseException) -> bool:
+    if isinstance(exc, subprocess.CalledProcessError):
+        haystack = f"{exc} {_called_process_output(exc)}".lower()
+    else:
+        haystack = str(exc).lower()
+    return (
+        all(marker in haystack for marker in YOUTUBE_CHALLENGE_FAILURE_MARKERS)
+        or any(marker in haystack for marker in YOUTUBE_WEBPO_FAILURE_MARKERS)
+    )
 
 
 def _dedupe_videos(videos: list[YouTubeVideo]) -> list[YouTubeVideo]:
@@ -865,9 +884,13 @@ class DownloadVideosStage(PipelineStage):
                         failed_video.metadata["download_stderr"] = _called_process_output(exc)[
                             -2000:
                         ]
-                    failed_video.metadata["download_error_kind"] = (
-                        "youtube_bot_wall" if _is_youtube_bot_wall(exc) else "download_error"
-                    )
+                    if _is_youtube_bot_wall(exc):
+                        error_kind = "youtube_bot_wall"
+                    elif _is_youtube_challenge_failure(exc):
+                        error_kind = "youtube_challenge_failed"
+                    else:
+                        error_kind = "download_error"
+                    failed_video.metadata["download_error_kind"] = error_kind
                     failed.append(failed_video)
                     output = (
                         f"\n{_called_process_output(exc)[-1200:]}"
@@ -893,7 +916,11 @@ class DownloadVideosStage(PipelineStage):
                 video
                 for video in failed
                 if video.metadata.get("download_error_kind")
-                not in {"youtube_bot_wall", "download_infrastructure_error"}
+                not in {
+                    "youtube_bot_wall",
+                    "youtube_challenge_failed",
+                    "download_infrastructure_error",
+                }
             ]
             if history_eligible_failures:
                 SourceHistory(self.settings.source_history_path).mark_videos_seen(

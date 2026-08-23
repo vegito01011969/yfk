@@ -35,12 +35,21 @@ def _download_auth_blocked(context: dict) -> tuple[bool, str | None]:
     downloaded = int(summary.get("downloaded_count") or 0)
     failed = int(summary.get("failed_count") or 0)
     bot_wall = int(failure_counts.get("youtube_bot_wall") or 0)
+    challenge_failed = int(failure_counts.get("youtube_challenge_failed") or 0)
     if attempted and downloaded == 0 and failed and bot_wall == failed:
         return (
             True,
             (
                 "All attempted yt-dlp downloads hit YouTube's bot-check wall. "
                 "The current cookies/auth context is not accepted from the Colab runtime."
+            ),
+        )
+    if attempted and downloaded == 0 and failed and challenge_failed == failed:
+        return (
+            True,
+            (
+                "All attempted yt-dlp downloads failed YouTube's JS/PO-token challenge. "
+                "The Colab runtime cannot currently solve YouTube extraction challenges."
             ),
         )
     return False, None
