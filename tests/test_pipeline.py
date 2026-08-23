@@ -24,6 +24,7 @@ from viral_pipeline.domain import (
 )
 from viral_pipeline.providers import (
     ColabYtDlpVideoDownloadProvider,
+    KaggleYtDlpVideoDownloadProvider,
     YtDlpFfmpegMediaProvider,
     YtDlpVideoDownloadProvider,
     build_providers,
@@ -349,6 +350,16 @@ def test_build_providers_can_select_colab_download_backend(tmp_path: Path) -> No
     assert isinstance(providers[2], ColabYtDlpVideoDownloadProvider)
 
 
+def test_build_providers_can_select_kaggle_download_backend(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "kaggle"
+
+    providers = build_providers(settings)
+
+    assert isinstance(providers[2], KaggleYtDlpVideoDownloadProvider)
+
+
 def test_colab_batch_download_starts_worker_asynchronously(
     tmp_path: Path,
     monkeypatch,
@@ -409,6 +420,69 @@ def test_colab_batch_download_starts_worker_asynchronously(
     assert failed == []
     assert any(call[0] == "upload" and call[-1].endswith("/worker.py") for call in calls)
     assert not any(call[:1] == ["exec"] and "-f" in call for call in calls)
+
+
+def test_kaggle_batch_download_pushes_kernel_and_reads_output(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "kaggle"
+    settings.kaggle_kernel_slug = "viral-pipeline-ytdlp-test"
+    settings.kaggle_command_timeout_seconds = 60
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+    calls: list[list[str]] = []
+
+    monkeypatch.setenv("KAGGLE_USERNAME", "test-user")
+    monkeypatch.setattr("viral_pipeline.providers.time.sleep", lambda seconds: None)
+
+    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ["kernels", "status"]:
+            return subprocess.CompletedProcess(args, 0, stdout="complete\n")
+        if args[:2] == ["kernels", "output"]:
+            output_dir = Path(args[-1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            result_json = tmp_path / "result.json"
+            result_json.write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "successes": 1,
+                        "results": [{"video_id": "video-1", "status": "ok"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            media_path = tmp_path / "video-1.mp4"
+            media_path.write_text("media", encoding="utf-8")
+            with zipfile.ZipFile(output_dir / "result.zip", "w") as archive:
+                archive.write(result_json, "result.json")
+                archive.write(media_path, "video-1.mp4")
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(provider, "_run", fake_run)
+
+    downloaded, failed = provider.download_many(
+        [
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Cricket short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+        tmp_path / "downloads",
+        max_successes=1,
+    )
+
+    assert [video.id for video in downloaded] == ["video-1"]
+    assert downloaded[0].metadata["download_provider"] == "kaggle-yt-dlp"
+    assert failed == []
+    assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
+    assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
+    assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
 
 
 def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import random
 import re
 import subprocess
@@ -2032,6 +2033,275 @@ class ColabYtDlpVideoDownloadProvider:
         return sorted(candidates, key=lambda path: path.stat().st_size, reverse=True)[0]
 
 
+class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
+    def download_many(
+        self,
+        videos: list[YouTubeVideo],
+        output_dir: Path,
+        *,
+        max_successes: int,
+    ) -> tuple[list[YouTubeVideo], list[YouTubeVideo]]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if not videos:
+            return [], []
+
+        kernel_dir = output_dir / "kaggle_kernel"
+        kernel_output_dir = output_dir / "kaggle_output"
+        kernel_dir.mkdir(parents=True, exist_ok=True)
+        kernel_output_dir.mkdir(parents=True, exist_ok=True)
+
+        owner = self._kaggle_owner()
+        slug = self._normalized_kernel_slug()
+        kernel_ref = f"{owner}/{slug}"
+        job = self._job_payload(videos, max_successes)
+        metadata_path = kernel_dir / "kernel-metadata.json"
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "id": kernel_ref,
+                    "title": self.settings.kaggle_kernel_title,
+                    "code_file": "kernel.py",
+                    "language": "python",
+                    "kernel_type": "script",
+                    "is_private": True,
+                    "enable_gpu": False,
+                    "enable_internet": True,
+                    "dataset_sources": [],
+                    "competition_sources": [],
+                    "kernel_sources": [],
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        (kernel_dir / "kernel.py").write_text(
+            self._kernel_source(job),
+            encoding="utf-8",
+        )
+
+        try:
+            self._run(["kernels", "push", "-p", str(kernel_dir)])
+            if not self._wait_for_kernel(kernel_ref):
+                return self._failed_batch(
+                    videos,
+                    error="kaggle_kernel_result_timeout",
+                    kind="download_infrastructure_error",
+                )
+            self._run(["kernels", "output", kernel_ref, "-p", str(kernel_output_dir)])
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            output = _called_process_output(exc)
+            return self._failed_batch(
+                videos,
+                error="kaggle_kernel_command_failed",
+                kind="download_infrastructure_error",
+                stderr=output,
+            )
+
+        result_zip = self._find_kaggle_output_file(kernel_output_dir, "result.zip")
+        if result_zip:
+            with zipfile.ZipFile(result_zip) as archive:
+                archive.extractall(output_dir)
+        else:
+            for media_path in kernel_output_dir.rglob("*"):
+                if media_path.is_file() and media_path.name in {"result.json"}:
+                    (output_dir / media_path.name).write_bytes(media_path.read_bytes())
+                elif media_path.is_file() and media_path.suffix.lower() in {
+                    ".mp4",
+                    ".mkv",
+                    ".webm",
+                    ".mov",
+                    ".json",
+                }:
+                    target = output_dir / media_path.name
+                    if not target.exists():
+                        target.write_bytes(media_path.read_bytes())
+
+        result_path = output_dir / "result.json"
+        result_payload = (
+            json.loads(result_path.read_text(encoding="utf-8"))
+            if result_path.exists()
+            else {}
+        )
+        result_by_id = {
+            str(item.get("video_id")): item
+            for item in result_payload.get("results", [])
+            if isinstance(item, dict)
+        }
+        downloaded: list[YouTubeVideo] = []
+        failed: list[YouTubeVideo] = []
+        for video in videos:
+            item = result_by_id.get(video.id, {})
+            if not item:
+                continue
+            if item.get("status") == "ok":
+                try:
+                    downloaded_path = self._find_download(video.id, output_dir)
+                except FileNotFoundError:
+                    item = {"status": "download_missing_file"}
+                else:
+                    updated = video.model_copy(deep=True)
+                    updated.downloaded_path = downloaded_path
+                    updated.metadata["download_provider"] = "kaggle-yt-dlp"
+                    updated.metadata["downloaded_path"] = str(downloaded_path)
+                    updated.metadata["kaggle_kernel"] = kernel_ref
+                    updated.metadata["download_backend"] = "kaggle_kernel"
+                    downloaded.append(updated)
+                    continue
+            failed_video = video.model_copy(deep=True)
+            failed_video.metadata["download_failed"] = True
+            failed_video.metadata["download_error"] = str(item.get("status") or "not_attempted")
+            failed_video.metadata["download_stderr"] = str(item.get("stderr") or "")[-2000:]
+            output_text = " ".join(str(item.get(key) or "") for key in ("stdout", "stderr"))
+            if _is_youtube_bot_wall_text(output_text):
+                error_kind = "youtube_bot_wall"
+            elif _is_youtube_challenge_failure_text(output_text):
+                error_kind = "youtube_challenge_failed"
+            else:
+                error_kind = "download_error"
+            failed_video.metadata["download_error_kind"] = error_kind
+            failed.append(failed_video)
+        return downloaded, failed
+
+    def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
+        downloaded, failed = self.download_many([video], output_dir, max_successes=1)
+        if downloaded:
+            return downloaded[0]
+        reason = failed[0].metadata.get("download_error") if failed else "not_attempted"
+        raise FileNotFoundError(
+            f"Kaggle yt-dlp did not produce a media file for {video.id}: {reason}"
+        )
+
+    def _job_payload(self, videos: list[YouTubeVideo], max_successes: int) -> dict[str, Any]:
+        extractor_args = [
+            value.strip()
+            for value in (self.settings.yt_dlp_extractor_args or "").splitlines()
+            if value.strip()
+        ]
+        return {
+            "videos": [{"id": video.id, "url": video.url} for video in videos],
+            "max_successes": max_successes,
+            "format": self.settings.yt_dlp_format,
+            "js_runtimes": self.settings.yt_dlp_js_runtimes,
+            "extractor_args": extractor_args,
+            "verbose": self.settings.yt_dlp_verbose,
+            "yt_dlp_requirement": self.settings.kaggle_yt_dlp_requirement,
+            "download_timeout_seconds": self.settings.yt_dlp_download_timeout_seconds,
+            "batch_timeout_seconds": self.settings.max_download_stage_seconds,
+            "enable_browser_po_token": self.settings.kaggle_enable_browser_po_token,
+        }
+
+    def _kernel_source(self, job: dict[str, Any]) -> str:
+        worker_source = Path("scripts/colab_ytdlp_worker.py").read_text(encoding="utf-8")
+        worker_source = worker_source.replace(
+            'REMOTE_DIR = Path("/content/viral_pipeline_download")',
+            f"REMOTE_DIR = Path({self.settings.kaggle_remote_dir!r})",
+        )
+        embedded_cookies = ""
+        cookies_path = self.settings.yt_dlp_cookies_path
+        if (
+            self.settings.kaggle_upload_youtube_cookies
+            and cookies_path
+            and cookies_path.exists()
+        ):
+            embedded_cookies = cookies_path.read_text(encoding="utf-8")
+        injected = (
+            "\n\n"
+            "# Generated by viral_pipeline.providers.KaggleYtDlpVideoDownloadProvider.\n"
+            f"EMBEDDED_JOB_JSON = {json.dumps(json.dumps(job, sort_keys=True))}\n"
+            f"EMBEDDED_COOKIES_TEXT = {json.dumps(embedded_cookies)}\n"
+            "\n\n"
+            "def _prepare_embedded_inputs() -> None:\n"
+            "    REMOTE_DIR.mkdir(parents=True, exist_ok=True)\n"
+            "    JOB_PATH.write_text(EMBEDDED_JOB_JSON, encoding='utf-8')\n"
+            "    if EMBEDDED_COOKIES_TEXT:\n"
+            "        (REMOTE_DIR / 'cookies.txt').write_text(EMBEDDED_COOKIES_TEXT, encoding='utf-8')\n"
+        )
+        worker_source = worker_source.replace(
+            "RESULT_JSON = REMOTE_DIR / \"result.json\"\n",
+            "RESULT_JSON = REMOTE_DIR / \"result.json\"\n" + injected + "\n",
+            1,
+        )
+        worker_source = worker_source.replace(
+            "def main() -> None:\n    job = json.loads(JOB_PATH.read_text(encoding=\"utf-8\"))",
+            (
+                "def main() -> None:\n"
+                "    _prepare_embedded_inputs()\n"
+                "    job = json.loads(JOB_PATH.read_text(encoding=\"utf-8\"))"
+            ),
+            1,
+        )
+        return worker_source
+
+    def _kaggle_owner(self) -> str:
+        env_username = os.environ.get("KAGGLE_USERNAME", "").strip()
+        if env_username:
+            return env_username
+        result = self._run(["config", "view"])
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if stripped.lower().startswith("username:"):
+                username = stripped.split(":", 1)[1].strip()
+                if username:
+                    return username
+        raise RuntimeError("Kaggle username was not available from `kaggle config view`")
+
+    def _normalized_kernel_slug(self) -> str:
+        slug = self.settings.kaggle_kernel_slug.strip().lower()
+        slug = re.sub(r"[^a-z0-9-]+", "-", slug)
+        slug = re.sub(r"-+", "-", slug).strip("-")
+        if not slug:
+            slug = f"viral-pipeline-ytdlp-{uuid4().hex[:8]}"
+        return slug[:63]
+
+    def _wait_for_kernel(self, kernel_ref: str) -> bool:
+        deadline = time.monotonic() + max(60, self.settings.kaggle_command_timeout_seconds)
+        while time.monotonic() < deadline:
+            result = self._run(["kernels", "status", kernel_ref])
+            status_text = (result.stdout or "").lower()
+            if any(value in status_text for value in ("complete", "succeeded")):
+                return True
+            if any(value in status_text for value in ("error", "failed", "cancel")):
+                LOGGER.warning("Kaggle kernel %s ended unsuccessfully:\n%s", kernel_ref, result.stdout)
+                return True
+            time.sleep(30)
+        LOGGER.warning("Kaggle kernel %s did not finish within timeout", kernel_ref)
+        return False
+
+    def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        command = ["kaggle", *args]
+        try:
+            return subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=self.settings.kaggle_command_timeout_seconds,
+            )
+        except subprocess.CalledProcessError as exc:
+            output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
+            if output:
+                LOGGER.warning(
+                    "Kaggle command failed (%s):\n%s",
+                    " ".join(command),
+                    output[-COMMAND_OUTPUT_SNIPPET_CHARS:],
+                )
+            raise
+        except subprocess.TimeoutExpired as exc:
+            output = "\n".join(str(part) for part in (exc.stdout, exc.stderr) if part)
+            LOGGER.warning(
+                "Kaggle command timed out after %ss (%s):\n%s",
+                self.settings.kaggle_command_timeout_seconds,
+                " ".join(command),
+                output[-COMMAND_OUTPUT_SNIPPET_CHARS:],
+            )
+            raise
+
+    def _find_kaggle_output_file(self, output_dir: Path, name: str) -> Path | None:
+        candidates = [path for path in output_dir.rglob(name) if path.is_file()]
+        return candidates[0] if candidates else None
+
+
 class LocalVideoDownloadProvider:
     def download(self, video: YouTubeVideo, output_dir: Path) -> YouTubeVideo:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -2610,6 +2880,8 @@ def build_providers(
     )
     if settings.use_real_media and settings.download_backend == "colab":
         download_provider: VideoDownloadProvider = ColabYtDlpVideoDownloadProvider(settings)
+    elif settings.use_real_media and settings.download_backend == "kaggle":
+        download_provider = KaggleYtDlpVideoDownloadProvider(settings)
     elif settings.use_real_media:
         download_provider = YtDlpVideoDownloadProvider(settings)
     else:

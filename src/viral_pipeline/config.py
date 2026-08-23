@@ -179,6 +179,13 @@ class Settings(BaseSettings):
     colab_yt_dlp_requirement: str = "yt-dlp>=2025.9.26"
     colab_upload_youtube_cookies: bool = False
     colab_enable_browser_po_token: bool = False
+    kaggle_kernel_slug: str = "viral-pipeline-ytdlp"
+    kaggle_kernel_title: str = "Viral Pipeline yt-dlp Experiment"
+    kaggle_remote_dir: str = "/kaggle/working/viral_pipeline_download"
+    kaggle_command_timeout_seconds: int = 1800
+    kaggle_yt_dlp_requirement: str = "yt-dlp>=2025.9.26"
+    kaggle_upload_youtube_cookies: bool = True
+    kaggle_enable_browser_po_token: bool = False
     render_width: int = 1080
     render_height: int = 1920
     render_fps: int = 30
