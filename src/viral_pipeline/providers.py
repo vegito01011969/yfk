@@ -2215,7 +2215,9 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             "    REMOTE_DIR.mkdir(parents=True, exist_ok=True)\n"
             "    JOB_PATH.write_text(EMBEDDED_JOB_JSON, encoding='utf-8')\n"
             "    if EMBEDDED_COOKIES_TEXT:\n"
-            "        (REMOTE_DIR / 'cookies.txt').write_text(EMBEDDED_COOKIES_TEXT, encoding='utf-8')\n"
+            "        (REMOTE_DIR / 'cookies.txt').write_text(\n"
+            "            EMBEDDED_COOKIES_TEXT, encoding='utf-8'\n"
+            "        )\n"
         )
         worker_source = worker_source.replace(
             "RESULT_JSON = REMOTE_DIR / \"result.json\"\n",
@@ -2262,7 +2264,11 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             if any(value in status_text for value in ("complete", "succeeded")):
                 return True
             if any(value in status_text for value in ("error", "failed", "cancel")):
-                LOGGER.warning("Kaggle kernel %s ended unsuccessfully:\n%s", kernel_ref, result.stdout)
+                LOGGER.warning(
+                    "Kaggle kernel %s ended unsuccessfully:\n%s",
+                    kernel_ref,
+                    result.stdout,
+                )
                 return True
             time.sleep(30)
         LOGGER.warning("Kaggle kernel %s did not finish within timeout", kernel_ref)
