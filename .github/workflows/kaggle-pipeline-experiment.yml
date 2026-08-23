@@ -51,6 +51,7 @@ jobs:
       YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "90"
       KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
       KAGGLE_KERNEL_SLUG: viral-pipeline-ytdlp-${{ github.run_id }}
       KAGGLE_KERNEL_TITLE: Viral Pipeline yt-dlp Experiment ${{ github.run_id }}
       KAGGLE_COMMAND_TIMEOUT_SECONDS: "1800"
@@ -94,6 +95,41 @@ jobs:
 
       - name: Prepare runtime directories
         run: mkdir -p data workdir/runs secrets
+
+      - name: Configure Kaggle auth
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          kaggle_dir = Path.home() / ".kaggle"
+          kaggle_dir.mkdir(parents=True, exist_ok=True)
+          kaggle_dir.chmod(0o700)
+
+          api_token = os.environ.get("KAGGLE_API_TOKEN", "").strip()
+          username = os.environ.get("KAGGLE_USERNAME", "").strip()
+          key = os.environ.get("KAGGLE_KEY", "").strip()
+
+          if api_token:
+              token_path = kaggle_dir / "access_token"
+              token_path.write_text(api_token, encoding="utf-8")
+              token_path.chmod(0o600)
+              print("Configured Kaggle auth with KAGGLE_API_TOKEN")
+          elif username and key:
+              legacy_path = kaggle_dir / "kaggle.json"
+              legacy_path.write_text(
+                  json.dumps({"username": username, "key": key}),
+                  encoding="utf-8",
+              )
+              legacy_path.chmod(0o600)
+              print("Configured Kaggle auth with legacy username/key")
+          else:
+              raise SystemExit(
+                  "Missing Kaggle auth. Set KAGGLE_API_TOKEN, or both "
+                  "KAGGLE_USERNAME and KAGGLE_KEY."
+              )
+          PY
 
       - name: Materialize YouTube cookies
         env:
