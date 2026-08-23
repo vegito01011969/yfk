@@ -111,12 +111,7 @@ jobs:
           username = os.environ.get("KAGGLE_USERNAME", "").strip()
           key = os.environ.get("KAGGLE_KEY", "").strip()
 
-          if api_token:
-              token_path = kaggle_dir / "access_token"
-              token_path.write_text(api_token, encoding="utf-8")
-              token_path.chmod(0o600)
-              print("Configured Kaggle auth with KAGGLE_API_TOKEN")
-          elif username and key:
+          if username and key:
               legacy_path = kaggle_dir / "kaggle.json"
               legacy_path.write_text(
                   json.dumps({"username": username, "key": key}),
@@ -124,7 +119,13 @@ jobs:
               )
               legacy_path.chmod(0o600)
               print("Configured Kaggle auth with legacy username/key")
-          else:
+
+          if api_token:
+              token_path = kaggle_dir / "access_token"
+              token_path.write_text(api_token, encoding="utf-8")
+              token_path.chmod(0o600)
+              print("Configured Kaggle auth with KAGGLE_API_TOKEN")
+          if not api_token and not (username and key):
               raise SystemExit(
                   "Missing Kaggle auth. Set KAGGLE_API_TOKEN, or both "
                   "KAGGLE_USERNAME and KAGGLE_KEY."
@@ -171,7 +172,9 @@ jobs:
           PY
 
       - name: Validate Kaggle credentials
-        run: kaggle config view
+        run: |
+          kaggle config view
+          kaggle kernels list --mine --page-size 1
 
       - name: Run Kaggle download experiment pipeline
         run: viral-pipeline run --no-resume

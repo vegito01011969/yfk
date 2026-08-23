@@ -2059,7 +2059,7 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             json.dumps(
                 {
                     "id": kernel_ref,
-                    "title": self.settings.kaggle_kernel_title,
+                    "title": slug,
                     "code_file": "kernel.py",
                     "language": "python",
                     "kernel_type": "script",
