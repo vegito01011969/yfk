@@ -485,6 +485,47 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
 
 
+def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "kaggle"
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+
+    monkeypatch.setenv("KAGGLE_USERNAME", "test-user")
+    monkeypatch.setattr("viral_pipeline.providers.time.sleep", lambda seconds: None)
+
+    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["kernels", "status"]:
+            return subprocess.CompletedProcess(args, 0, stdout="complete\n")
+        if args[:2] == ["kernels", "output"]:
+            output_dir = Path(args[-1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(provider, "_run", fake_run)
+
+    downloaded, failed = provider.download_many(
+        [
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Funny short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+        tmp_path / "downloads",
+        max_successes=1,
+    )
+
+    assert downloaded == []
+    assert len(failed) == 1
+    assert failed[0].metadata["download_error"] == "kaggle_kernel_missing_result_json"
+    assert failed[0].metadata["download_error_kind"] == "download_infrastructure_error"
+
+
 def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 

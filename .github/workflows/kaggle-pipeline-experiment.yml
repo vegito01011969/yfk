@@ -232,6 +232,22 @@ jobs:
           PIPELINE_SUMMARY_LABEL: Kaggle Shorts Pipeline Experiment
         run: python scripts/summarize_pipeline_run.py
 
+      - name: Collect Kaggle kernel diagnostics
+        if: always()
+        run: |
+          mkdir -p workdir/kaggle-diagnostics
+          KERNEL_REF="${KAGGLE_USERNAME}/${KAGGLE_KERNEL_SLUG}"
+          {
+            echo "kernel_ref=${KERNEL_REF}"
+            echo "kaggle_version=$(kaggle --version 2>&1)"
+          } > workdir/kaggle-diagnostics/summary.txt
+          kaggle kernels status "$KERNEL_REF" \
+            > workdir/kaggle-diagnostics/status.txt 2>&1 || true
+          kaggle kernels files "$KERNEL_REF" \
+            > workdir/kaggle-diagnostics/files.txt 2>&1 || true
+          kaggle kernels logs "$KERNEL_REF" \
+            > workdir/kaggle-diagnostics/logs.txt 2>&1 || true
+
       - name: Upload Kaggle experiment diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -246,6 +262,7 @@ jobs:
             workdir/runs/**/downloads/kaggle_kernel/kernel-metadata.json
             workdir/runs/**/downloads/kaggle_output/**
             workdir/runs/**/downloads/result.json
+            workdir/kaggle-diagnostics/**
           retention-days: 3
 
       - name: Cleanup bulky pipeline state

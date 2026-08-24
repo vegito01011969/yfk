@@ -2118,22 +2118,39 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
                         target.write_bytes(media_path.read_bytes())
 
         result_path = output_dir / "result.json"
-        result_payload = (
-            json.loads(result_path.read_text(encoding="utf-8"))
-            if result_path.exists()
-            else {}
-        )
+        if not result_path.exists():
+            return self._failed_batch(
+                videos,
+                error="kaggle_kernel_missing_result_json",
+                kind="download_infrastructure_error",
+                stderr=self._kaggle_output_listing(kernel_output_dir),
+            )
+        result_payload = json.loads(result_path.read_text(encoding="utf-8"))
         result_by_id = {
             str(item.get("video_id")): item
             for item in result_payload.get("results", [])
             if isinstance(item, dict)
         }
+        if not result_by_id:
+            return self._failed_batch(
+                videos,
+                error="kaggle_kernel_empty_result",
+                kind="download_infrastructure_error",
+                stderr=json.dumps(result_payload, sort_keys=True)[
+                    -COMMAND_OUTPUT_SNIPPET_CHARS:
+                ],
+            )
         downloaded: list[YouTubeVideo] = []
         failed: list[YouTubeVideo] = []
         for video in videos:
             item = result_by_id.get(video.id, {})
             if not item:
-                continue
+                item = {
+                    "status": "kaggle_result_missing_video",
+                    "stderr": json.dumps(result_payload, sort_keys=True)[
+                        -COMMAND_OUTPUT_SNIPPET_CHARS:
+                    ],
+                }
             if item.get("status") == "ok":
                 try:
                     downloaded_path = self._find_download(video.id, output_dir)
@@ -2306,6 +2323,18 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
     def _find_kaggle_output_file(self, output_dir: Path, name: str) -> Path | None:
         candidates = [path for path in output_dir.rglob(name) if path.is_file()]
         return candidates[0] if candidates else None
+
+    def _kaggle_output_listing(self, output_dir: Path) -> str:
+        if not output_dir.exists():
+            return f"Kaggle output directory does not exist: {output_dir}"
+        files = [
+            f"{path.relative_to(output_dir)} ({path.stat().st_size} bytes)"
+            for path in sorted(output_dir.rglob("*"))
+            if path.is_file()
+        ]
+        if not files:
+            return f"Kaggle output directory is empty: {output_dir}"
+        return "\n".join(files)[-COMMAND_OUTPUT_SNIPPET_CHARS:]
 
 
 class LocalVideoDownloadProvider:
