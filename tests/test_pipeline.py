@@ -78,6 +78,17 @@ def load_pipeline_retry_script():
     return module
 
 
+def load_colab_worker_script():
+    scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
+    script_path = scripts_dir / "colab_ytdlp_worker.py"
+    spec = util.spec_from_file_location("colab_ytdlp_worker", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_full_local_pipeline_persists_publish_package(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     store = PipelineStore(settings.pipeline_db_path)
@@ -349,6 +360,53 @@ def test_media_dependency_and_colab_requirement_include_ejs() -> None:
     assert Settings(_env_file=None).colab_yt_dlp_requirement == (
         "yt-dlp[default]>=2025.9.26"
     )
+
+
+def test_colab_worker_retries_ejs_failures_with_remote_components(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    worker = load_colab_worker_script()
+    commands: list[list[str]] = []
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        if len(commands) < 3:
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                stdout="",
+                stderr="ERROR: [youtube] video-1: The page needs to be reloaded.",
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(worker.subprocess, "run", fake_run)
+
+    result = worker._download_one(
+        video={"id": "video-1", "url": "https://www.youtube.com/watch?v=video-1"},
+        job={
+            "format": "best",
+            "js_runtimes": "deno:/tmp/deno",
+            "extractor_args": [],
+            "download_timeout_seconds": 30,
+        },
+        downloads_dir=tmp_path,
+        deno_path=Path("/tmp/deno"),
+        chrome_path=None,
+        enable_browser_po_token=False,
+    )
+
+    assert result["status"] == "ok"
+    assert commands[0].count("--remote-components") == 0
+    assert commands[1][commands[1].index("--remote-components") + 1] == "ejs:github"
+    assert commands[2][commands[2].index("--remote-components") + 1] == "ejs:npm"
 
 
 def test_build_providers_can_select_colab_download_backend(tmp_path: Path) -> None:

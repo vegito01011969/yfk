@@ -143,6 +143,15 @@ def _patch_wpc_provider_for_colab() -> str | None:
     return str(provider_path)
 
 
+def _is_ejs_challenge_failure(text: str) -> bool:
+    haystack = text.lower()
+    return (
+        "the page needs to be reloaded" in haystack
+        or "challenge solving failed" in haystack
+        or "challenge solver script distribution" in haystack
+    )
+
+
 def _download_one(
     *,
     video: dict[str, object],
@@ -154,7 +163,8 @@ def _download_one(
 ) -> dict[str, object]:
     video_id = str(video["id"])
     output_template = downloads_dir / f"{video_id}.%(ext)s"
-    command = [
+
+    base_command = [
         sys.executable,
         "-m",
         "yt_dlp",
@@ -179,54 +189,77 @@ def _download_one(
 
     cookies_path = REMOTE_DIR / "cookies.txt"
     if cookies_path.exists():
-        command.extend(["--cookies", str(cookies_path)])
+        base_command.extend(["--cookies", str(cookies_path)])
     js_runtime_arg = _js_runtime_arg(job.get("js_runtimes"), deno_path)
     if js_runtime_arg:
-        command.extend(["--js-runtimes", js_runtime_arg])
+        base_command.extend(["--js-runtimes", js_runtime_arg])
     extractor_args_values = job.get("extractor_args") or [
         "youtube:player_client=tv_downgraded,tv_simply,web_embedded,android_vr,mweb,web_safari"
     ]
     if enable_browser_po_token and chrome_path:
         extractor_args_values.append(f"youtubepot-wpc:browser_path={chrome_path}")
     for extractor_args in extractor_args_values:
-        command.extend(["--extractor-args", str(extractor_args)])
+        base_command.extend(["--extractor-args", str(extractor_args)])
     if job.get("verbose"):
-        command.append("--verbose")
-    command.append(str(video["url"]))
+        base_command.append("--verbose")
+
+    remote_component_attempts: list[list[str]] = [[]]
+    remote_component_attempts.append(["--remote-components", "ejs:github"])
+    if deno_path:
+        remote_component_attempts.append(["--remote-components", "ejs:npm"])
 
     timeout_seconds = int(job.get("download_timeout_seconds") or 240)
-    try:
-        result = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return {
-            "video_id": video_id,
-            "status": "download_timeout",
-            "command": command,
-            "timeout_seconds": timeout_seconds,
-            "stdout": str(exc.stdout or "")[-8000:],
-            "stderr": str(exc.stderr or "")[-8000:],
-        }
+    failures: list[dict[str, object]] = []
+    for remote_component_args in remote_component_attempts:
+        command = [*base_command, *remote_component_args, str(video["url"])]
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return {
+                "video_id": video_id,
+                "status": "download_timeout",
+                "command": command,
+                "timeout_seconds": timeout_seconds,
+                "stdout": str(exc.stdout or "")[-8000:],
+                "stderr": str(exc.stderr or "")[-8000:],
+                "attempts": failures,
+            }
 
-    if result.returncode != 0:
-        return {
-            "video_id": video_id,
-            "status": "download_failed",
+        if result.returncode == 0:
+            return {
+                "video_id": video_id,
+                "status": "ok",
+                "command": command,
+                "remote_components": remote_component_args,
+                "attempts": failures,
+            }
+
+        failure = {
             "command": command,
             "returncode": result.returncode,
-            "stdout": result.stdout[-8000:],
-            "stderr": result.stderr[-8000:],
+            "stdout": result.stdout[-4000:],
+            "stderr": result.stderr[-4000:],
         }
+        failures.append(failure)
+        if not _is_ejs_challenge_failure(f"{result.stdout}\n{result.stderr}"):
+            break
 
+    stdout = "\n".join(str(failure.get("stdout") or "") for failure in failures)
+    stderr = "\n".join(str(failure.get("stderr") or "") for failure in failures)
     return {
         "video_id": video_id,
-        "status": "ok",
-        "command": command,
+        "status": "download_failed",
+        "command": failures[-1].get("command") if failures else base_command,
+        "returncode": failures[-1].get("returncode") if failures else None,
+        "stdout": stdout[-8000:],
+        "stderr": stderr[-8000:],
+        "attempts": failures,
     }
 
 
