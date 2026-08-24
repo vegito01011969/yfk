@@ -18,6 +18,8 @@ secrets/
 /cookies.base64
 /youtube_cookies.txt
 /YOUTUBE_COOKIES_TXT
+/kaggle-yt-dlp-vendor.zip
+/yt_dlp_vendor.zip
 /*.mp4
 /*.webm
 /*.mkv

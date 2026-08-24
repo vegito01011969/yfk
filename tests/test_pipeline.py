@@ -490,6 +490,8 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     assert "_package_parent" in kernel_source
     assert "nested_zip_" in kernel_source
     assert "yt_dlp package was not found in Kaggle inputs" in kernel_source
+    assert "_wait_for_network" in kernel_source
+    assert "--socket-timeout" in kernel_source
     assert not any(call[:1] == ["datasets"] for call in calls)
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
@@ -561,6 +563,67 @@ def test_kaggle_batch_download_uses_configured_vendor_dataset(
     assert metadata["dataset_sources"] == ["test-user/stable-vendor"]
     assert not any(call[:2] == ["datasets", "create"] for call in calls)
     assert not any(call[:2] == ["datasets", "files"] for call in calls)
+
+
+def test_kaggle_batch_download_classifies_network_unavailable_as_infrastructure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "kaggle"
+    settings.kaggle_vendor_dataset_ref = "test-user/stable-vendor"
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+
+    monkeypatch.setenv("KAGGLE_USERNAME", "test-user")
+    monkeypatch.setattr("viral_pipeline.providers.time.sleep", lambda seconds: None)
+
+    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["kernels", "status"]:
+            return subprocess.CompletedProcess(args, 0, stdout="complete\n")
+        if args[:2] == ["kernels", "output"]:
+            output_dir = Path(args[-1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            result_json = tmp_path / "result.json"
+            result_json.write_text(
+                json.dumps(
+                    {
+                        "status": "network_unavailable",
+                        "successes": 0,
+                        "results": [
+                            {
+                                "video_id": "video-1",
+                                "status": "network_unavailable",
+                                "stderr": "Temporary failure in name resolution",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with zipfile.ZipFile(output_dir / "result.zip", "w") as archive:
+                archive.write(result_json, "result.json")
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(provider, "_run", fake_run)
+
+    downloaded, failed = provider.download_many(
+        [
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Funny short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+        tmp_path / "downloads",
+        max_successes=1,
+    )
+
+    assert downloaded == []
+    assert len(failed) == 1
+    assert failed[0].metadata["download_error"] == "network_unavailable"
+    assert failed[0].metadata["download_error_kind"] == "download_infrastructure_error"
 
 
 def test_kaggle_batch_download_requires_vendor_dataset_ref(

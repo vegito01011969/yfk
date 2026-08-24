@@ -171,6 +171,7 @@ class Settings(BaseSettings):
     yt_dlp_extractor_args: str | None = None
     yt_dlp_verbose: bool = False
     yt_dlp_download_timeout_seconds: int = 240
+    yt_dlp_network_timeout_seconds: int = 180
     colab_cli_auth: str = "adc"
     colab_cli_config_path: Path | None = None
     colab_session_prefix: str = "viral-pipeline"

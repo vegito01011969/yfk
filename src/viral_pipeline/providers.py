@@ -45,6 +45,13 @@ YOUTUBE_WEBPO_FAILURE_MARKERS = (
     "could not find webpoclient in browser",
     "timed out waiting for webpoclient",
 )
+NETWORK_INFRASTRUCTURE_FAILURE_MARKERS = (
+    "network_unavailable",
+    "temporary failure in name resolution",
+    "failed to resolve",
+    "name or service not known",
+    "nodename nor servname provided",
+)
 
 
 def _is_youtube_bot_wall_text(text: str) -> bool:
@@ -58,6 +65,11 @@ def _is_youtube_challenge_failure_text(text: str) -> bool:
         all(marker in haystack for marker in YOUTUBE_CHALLENGE_FAILURE_MARKERS)
         or any(marker in haystack for marker in YOUTUBE_WEBPO_FAILURE_MARKERS)
     )
+
+
+def _is_network_infrastructure_failure_text(text: str) -> bool:
+    haystack = text.lower()
+    return any(marker in haystack for marker in NETWORK_INFRASTRUCTURE_FAILURE_MARKERS)
 
 
 def _called_process_output(exc: subprocess.CalledProcessError | subprocess.TimeoutExpired) -> str:
@@ -1851,11 +1863,15 @@ class ColabYtDlpVideoDownloadProvider:
             failed_video.metadata["download_failed"] = True
             failed_video.metadata["download_error"] = str(item.get("status") or "not_attempted")
             failed_video.metadata["download_stderr"] = str(item.get("stderr") or "")[-2000:]
-            output_text = " ".join(str(item.get(key) or "") for key in ("stdout", "stderr"))
+            output_text = " ".join(
+                str(item.get(key) or "") for key in ("status", "stdout", "stderr")
+            )
             if _is_youtube_bot_wall_text(output_text):
                 error_kind = "youtube_bot_wall"
             elif _is_youtube_challenge_failure_text(output_text):
                 error_kind = "youtube_challenge_failed"
+            elif _is_network_infrastructure_failure_text(output_text):
+                error_kind = "download_infrastructure_error"
             else:
                 error_kind = "download_error"
             failed_video.metadata["download_error_kind"] = error_kind
@@ -2171,11 +2187,15 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             failed_video.metadata["download_failed"] = True
             failed_video.metadata["download_error"] = str(item.get("status") or "not_attempted")
             failed_video.metadata["download_stderr"] = str(item.get("stderr") or "")[-2000:]
-            output_text = " ".join(str(item.get(key) or "") for key in ("stdout", "stderr"))
+            output_text = " ".join(
+                str(item.get(key) or "") for key in ("status", "stdout", "stderr")
+            )
             if _is_youtube_bot_wall_text(output_text):
                 error_kind = "youtube_bot_wall"
             elif _is_youtube_challenge_failure_text(output_text):
                 error_kind = "youtube_challenge_failed"
+            elif _is_network_infrastructure_failure_text(output_text):
+                error_kind = "download_infrastructure_error"
             else:
                 error_kind = "download_error"
             failed_video.metadata["download_error_kind"] = error_kind
@@ -2207,6 +2227,7 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             "yt_dlp_requirement": self.settings.kaggle_yt_dlp_requirement,
             "skip_yt_dlp_install": True,
             "download_timeout_seconds": self.settings.yt_dlp_download_timeout_seconds,
+            "network_timeout_seconds": self.settings.yt_dlp_network_timeout_seconds,
             "batch_timeout_seconds": self.settings.max_download_stage_seconds,
             "enable_browser_po_token": self.settings.kaggle_enable_browser_po_token,
         }

@@ -48,7 +48,8 @@ jobs:
       YT_DLP_JS_RUNTIMES: node
       YT_DLP_EXTRACTOR_ARGS: "youtube:player_client=tv_downgraded,tv_simply,web_embedded,android_vr,mweb,web_safari"
       YT_DLP_VERBOSE: "false"
-      YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "90"
+      YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "240"
+      YT_DLP_NETWORK_TIMEOUT_SECONDS: "180"
       KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}

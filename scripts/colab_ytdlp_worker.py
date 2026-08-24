@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -34,6 +35,28 @@ def _write_archive(downloads_dir: Path) -> None:
 
 def _run_best_effort(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=False, capture_output=True, text=True)
+
+
+def _wait_for_network(timeout_seconds: int) -> dict[str, object]:
+    deadline = time.monotonic() + max(1, timeout_seconds)
+    last_error = ""
+    checks = 0
+    while time.monotonic() < deadline:
+        checks += 1
+        try:
+            socket.getaddrinfo("www.youtube.com", 443)
+            with socket.create_connection(("www.youtube.com", 443), timeout=10):
+                pass
+            return {"ok": True, "checks": checks}
+        except Exception as exc:
+            last_error = repr(exc)
+            time.sleep(5)
+    return {
+        "ok": False,
+        "checks": checks,
+        "timeout_seconds": timeout_seconds,
+        "error": last_error,
+    }
 
 
 def _install_deno() -> Path | None:
@@ -140,6 +163,14 @@ def _download_one(
         "--write-info-json",
         "--merge-output-format",
         "mp4",
+        "--retries",
+        "10",
+        "--fragment-retries",
+        "10",
+        "--socket-timeout",
+        "20",
+        "--retry-sleep",
+        "exp=1:20",
         "-f",
         str(job["format"]),
         "-o",
@@ -203,6 +234,28 @@ def main() -> None:
     job = json.loads(JOB_PATH.read_text(encoding="utf-8"))
     downloads_dir = REMOTE_DIR / "downloads"
     downloads_dir.mkdir(parents=True, exist_ok=True)
+    videos = job.get("videos")
+    if not isinstance(videos, list):
+        videos = [{"id": job["video_id"], "url": job["url"]}]
+
+    network_check = _wait_for_network(int(job.get("network_timeout_seconds") or 180))
+    if not network_check.get("ok"):
+        _write_result(
+            "network_unavailable",
+            network_check=network_check,
+            successes=0,
+            results=[
+                {
+                    "video_id": str(video.get("id") or ""),
+                    "status": "network_unavailable",
+                    "stderr": json.dumps(network_check, sort_keys=True),
+                }
+                for video in videos
+                if isinstance(video, dict)
+            ],
+        )
+        _write_archive(downloads_dir)
+        return
 
     enable_browser_po_token = bool(job.get("enable_browser_po_token"))
     install_commands = []
@@ -230,9 +283,6 @@ def main() -> None:
     deno_path = _install_deno()
     chrome_path = _install_chrome() if enable_browser_po_token else None
     wpc_patch_path = _patch_wpc_provider_for_colab() if enable_browser_po_token else None
-    videos = job.get("videos")
-    if not isinstance(videos, list):
-        videos = [{"id": job["video_id"], "url": job["url"]}]
 
     max_successes = int(job.get("max_successes") or len(videos))
     batch_timeout_seconds = int(job.get("batch_timeout_seconds") or 0)
@@ -271,6 +321,7 @@ def main() -> None:
         "ok" if successes else "download_failed",
         deno_path=str(deno_path) if deno_path else None,
         chrome_path=str(chrome_path) if chrome_path else None,
+        network_check=network_check,
         wpc_patch_path=wpc_patch_path,
         successes=successes,
         results=results,
