@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tomllib
 import zipfile
 from importlib import util
 from pathlib import Path
@@ -337,6 +338,17 @@ def test_ytdlp_download_can_enable_verbose_output(tmp_path: Path, monkeypatch) -
     )
 
     assert "--verbose" in commands[0]
+
+
+def test_media_dependency_and_colab_requirement_include_ejs() -> None:
+    pyproject_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    media_dependencies = pyproject["project"]["optional-dependencies"]["media"]
+
+    assert "yt-dlp[default]>=2025.9.26" in media_dependencies
+    assert Settings(_env_file=None).colab_yt_dlp_requirement == (
+        "yt-dlp[default]>=2025.9.26"
+    )
 
 
 def test_build_providers_can_select_colab_download_backend(tmp_path: Path) -> None:

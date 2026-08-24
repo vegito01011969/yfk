@@ -95,7 +95,7 @@ jobs:
           python -m pip install -e ".[media,ai]"
           python -m pip install "google-colab-cli"
           python -m pip install "jupyter-kernel-client @ git+https://github.com/googlecolab/jupyter-kernel-client.git@f18e982c3265df5e923aa9def101ab3fd737e139"
-          python -m pip show yt-dlp google-colab-cli
+          python -m pip show yt-dlp yt-dlp-ejs google-colab-cli
           colab version
 
       - name: Prepare runtime directories

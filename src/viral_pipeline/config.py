@@ -177,7 +177,7 @@ class Settings(BaseSettings):
     colab_session_prefix: str = "viral-pipeline"
     colab_remote_dir: str = "/content/viral_pipeline_download"
     colab_command_timeout_seconds: int = 900
-    colab_yt_dlp_requirement: str = "yt-dlp>=2025.9.26"
+    colab_yt_dlp_requirement: str = "yt-dlp[default]>=2025.9.26"
     colab_upload_youtube_cookies: bool = False
     colab_enable_browser_po_token: bool = False
     render_width: int = 1080
