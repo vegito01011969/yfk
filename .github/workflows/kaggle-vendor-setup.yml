@@ -1,29 +1,14 @@
-name: setup-kaggle-yt-dlp-vendor
+name: build-kaggle-yt-dlp-vendor-artifact
 
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "Create the vendor dataset once, or update an existing one"
-        required: true
-        default: "create"
-        type: choice
-        options:
-          - create
-          - update
 
 jobs:
-  setup:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     permissions:
       contents: read
-
-    env:
-      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-      KAGGLE_VENDOR_DATASET_REF: ${{ secrets.KAGGLE_VENDOR_DATASET_REF }}
 
     steps:
       - name: Check out repository
@@ -38,79 +23,21 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install -e ".[media]"
-          python -m pip install "kaggle"
-          python -m pip show yt-dlp kaggle
-          kaggle --version
+          python -m pip show yt-dlp
 
-      - name: Configure Kaggle auth
+      - name: Build yt-dlp vendor artifact
         run: |
           python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          kaggle_dir = Path.home() / ".kaggle"
-          kaggle_dir.mkdir(parents=True, exist_ok=True)
-          kaggle_dir.chmod(0o700)
-
-          api_token = os.environ.get("KAGGLE_API_TOKEN", "").strip()
-          username = os.environ.get("KAGGLE_USERNAME", "").strip()
-          key = os.environ.get("KAGGLE_KEY", "").strip()
-
-          if api_token:
-              token_path = kaggle_dir / "access_token"
-              token_path.write_text(api_token, encoding="utf-8")
-              token_path.chmod(0o600)
-              print("Configured Kaggle auth with KAGGLE_API_TOKEN")
-          elif username and key:
-              legacy_path = kaggle_dir / "kaggle.json"
-              legacy_path.write_text(
-                  json.dumps({"username": username, "key": key}),
-                  encoding="utf-8",
-              )
-              legacy_path.chmod(0o600)
-              print("Configured Kaggle auth with legacy username/key")
-          else:
-              raise SystemExit(
-                  "Missing Kaggle auth. Set KAGGLE_API_TOKEN, or both "
-                  "KAGGLE_USERNAME and KAGGLE_KEY."
-              )
-          PY
-
-      - name: Build yt-dlp vendor dataset
-        run: |
-          python - <<'PY'
-          import json
-          import os
           import zipfile
           from importlib import util
           from pathlib import Path
 
-          username = os.environ["KAGGLE_USERNAME"].strip().lower()
-          dataset_ref = (
-              os.environ.get("KAGGLE_VENDOR_DATASET_REF", "").strip().lower()
-              or f"{username}/viral-pipeline-yt-dlp-vendor"
-          )
-          if "/" not in dataset_ref:
-              raise SystemExit("KAGGLE_VENDOR_DATASET_REF must be owner/dataset-slug")
-          owner, slug = dataset_ref.split("/", 1)
-          if owner != username:
-              raise SystemExit(
-                  "KAGGLE_VENDOR_DATASET_REF owner must match KAGGLE_USERNAME"
-              )
-
           out = Path("workdir/kaggle-vendor")
           out.mkdir(parents=True, exist_ok=True)
-          (out / "dataset-metadata.json").write_text(
-              json.dumps(
-                  {
-                      "title": slug,
-                      "id": dataset_ref,
-                      "licenses": [{"name": "CC0-1.0"}],
-                  },
-                  indent=2,
-                  sort_keys=True,
-              ),
+          readme = out / "README.txt"
+          readme.write_text(
+              "Upload yt_dlp_vendor.zip to a public Kaggle dataset. "
+              "Set KAGGLE_VENDOR_DATASET_REF to owner/dataset-slug.\n",
               encoding="utf-8",
           )
 
@@ -123,16 +50,14 @@ jobs:
                   if not path.is_file() or path.suffix == ".pyc" or "__pycache__" in path.parts:
                       continue
                   archive.write(path, Path("yt_dlp") / path.relative_to(source_dir))
-          print(f"Built vendor dataset folder for {dataset_ref}")
+          print(f"Built {out / 'yt_dlp_vendor.zip'}")
           PY
 
-      - name: Create or update Kaggle vendor dataset
-        run: |
-          VENDOR_REF="${KAGGLE_VENDOR_DATASET_REF:-${KAGGLE_USERNAME}/viral-pipeline-yt-dlp-vendor}"
-          if [ "${{ inputs.mode }}" = "create" ]; then
-            kaggle datasets create -p workdir/kaggle-vendor --public -q -t -r skip
-            echo "Created Kaggle vendor dataset: ${VENDOR_REF}"
-          else
-            kaggle datasets version -p workdir/kaggle-vendor -m "Update yt-dlp vendor" -q -t -r skip -d
-            echo "Updated Kaggle vendor dataset: ${VENDOR_REF}"
-          fi
+      - name: Upload yt-dlp vendor artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaggle-yt-dlp-vendor
+          path: |
+            workdir/kaggle-vendor/yt_dlp_vendor.zip
+            workdir/kaggle-vendor/README.txt
+          retention-days: 14

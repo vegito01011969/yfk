@@ -199,9 +199,12 @@ jobs:
 
       - name: Configure Kaggle vendor dataset
         run: |
-          VENDOR_REF="${KAGGLE_VENDOR_DATASET_REF:-${KAGGLE_USERNAME}/viral-pipeline-yt-dlp-vendor}"
-          echo "KAGGLE_VENDOR_DATASET_REF=${VENDOR_REF}" >> "$GITHUB_ENV"
-          echo "Using Kaggle vendor dataset: ${VENDOR_REF}"
+          if [ -z "$KAGGLE_VENDOR_DATASET_REF" ]; then
+            echo "Missing required secret: KAGGLE_VENDOR_DATASET_REF"
+            echo "Create a public Kaggle dataset containing yt_dlp_vendor.zip, then set this secret to owner/dataset-slug."
+            exit 1
+          fi
+          echo "Using Kaggle vendor dataset: ${KAGGLE_VENDOR_DATASET_REF}"
 
       - name: Run Kaggle download experiment pipeline
         run: viral-pipeline run --no-resume
@@ -244,10 +247,9 @@ jobs:
         run: |
           mkdir -p workdir/kaggle-diagnostics
           KERNEL_REF="${KAGGLE_USERNAME}/${KAGGLE_KERNEL_SLUG}"
-          VENDOR_REF="${KAGGLE_VENDOR_DATASET_REF:-${KAGGLE_USERNAME}/viral-pipeline-yt-dlp-vendor}"
           {
             echo "kernel_ref=${KERNEL_REF}"
-            echo "vendor_ref=${VENDOR_REF}"
+            echo "vendor_ref=${KAGGLE_VENDOR_DATASET_REF}"
             echo "kaggle_version=$(kaggle --version 2>&1)"
           } > workdir/kaggle-diagnostics/summary.txt
           kaggle kernels status "$KERNEL_REF" \

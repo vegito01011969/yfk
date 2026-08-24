@@ -13,7 +13,6 @@ import unicodedata
 import zipfile
 from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
-from importlib import util
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
@@ -2048,20 +2047,16 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
 
         kernel_dir = output_dir / "kaggle_kernel"
         kernel_output_dir = output_dir / "kaggle_output"
-        dataset_dir = output_dir / "kaggle_vendor_dataset"
         kernel_dir.mkdir(parents=True, exist_ok=True)
         kernel_output_dir.mkdir(parents=True, exist_ok=True)
-        dataset_dir.mkdir(parents=True, exist_ok=True)
 
         owner = self._kaggle_owner()
         slug = self._normalized_kernel_slug()
         kernel_ref = f"{owner}/{slug}"
-        vendor_ref = self._vendor_dataset_ref(owner, slug)
+        vendor_ref = self._vendor_dataset_ref()
         vendor_slug = vendor_ref.split("/", 1)[1]
         job = self._job_payload(videos, max_successes)
         metadata_path = kernel_dir / "kernel-metadata.json"
-        if not self.settings.kaggle_vendor_dataset_ref.strip():
-            self._prepare_vendor_dataset(dataset_dir, vendor_ref, vendor_slug)
         metadata_path.write_text(
             json.dumps(
                 {
@@ -2088,9 +2083,6 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
         )
 
         try:
-            if not self.settings.kaggle_vendor_dataset_ref.strip():
-                self._run(["datasets", "create", "-p", str(dataset_dir), "-q", "--public"])
-                time.sleep(90)
             self._run(["kernels", "push", "-p", str(kernel_dir)])
             if not self._wait_for_kernel(kernel_ref):
                 return self._failed_batch(
@@ -2289,45 +2281,17 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
         )
         return worker_source
 
-    def _prepare_vendor_dataset(self, dataset_dir: Path, vendor_ref: str, vendor_slug: str) -> None:
-        metadata_path = dataset_dir / "dataset-metadata.json"
-        metadata_path.write_text(
-            json.dumps(
-                {
-                    "title": vendor_slug,
-                    "id": vendor_ref,
-                    "licenses": [{"name": "CC0-1.0"}],
-                },
-                indent=2,
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
-        self._write_yt_dlp_vendor_zip(dataset_dir / "yt_dlp_vendor.zip")
-
-    def _write_yt_dlp_vendor_zip(self, target: Path) -> None:
-        spec = util.find_spec("yt_dlp")
-        if not spec or not spec.submodule_search_locations:
-            raise RuntimeError("yt_dlp package is not installed locally and cannot be vendored")
-        source_dir = Path(next(iter(spec.submodule_search_locations)))
-        with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(source_dir.rglob("*")):
-                if not path.is_file() or path.suffix == ".pyc" or "__pycache__" in path.parts:
-                    continue
-                archive.write(path, Path("yt_dlp") / path.relative_to(source_dir))
-
-    def _vendor_dataset_ref(self, owner: str, kernel_slug: str) -> str:
+    def _vendor_dataset_ref(self) -> str:
         configured = self.settings.kaggle_vendor_dataset_ref.strip().lower()
-        if configured:
-            if "/" not in configured:
-                raise RuntimeError(
-                    "KAGGLE_VENDOR_DATASET_REF must be in owner/dataset-slug format"
-                )
-            return configured
-        vendor_slug = "viral-pipeline-yt-dlp-vendor"
-        if len(vendor_slug) > 50:
-            vendor_slug = f"{kernel_slug}-vendor"[:50].strip("-")
-        return f"{owner}/{vendor_slug}"
+        if not configured:
+            raise RuntimeError(
+                "KAGGLE_VENDOR_DATASET_REF is required for the Kaggle download backend. "
+                "Create one public Kaggle dataset containing yt_dlp_vendor.zip and set "
+                "KAGGLE_VENDOR_DATASET_REF to owner/dataset-slug."
+            )
+        if "/" not in configured:
+            raise RuntimeError("KAGGLE_VENDOR_DATASET_REF must be in owner/dataset-slug format")
+        return configured
 
     def _kaggle_owner(self) -> str:
         env_username = os.environ.get("KAGGLE_USERNAME", "").strip()

@@ -430,6 +430,7 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     settings.use_real_media = True
     settings.download_backend = "kaggle"
     settings.kaggle_kernel_slug = "viral-pipeline-ytdlp-test"
+    settings.kaggle_vendor_dataset_ref = "test-user/stable-vendor"
     settings.kaggle_command_timeout_seconds = 60
     provider = KaggleYtDlpVideoDownloadProvider(settings)
     calls: list[list[str]] = []
@@ -483,18 +484,10 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     kernel_source = (tmp_path / "downloads" / "kaggle_kernel" / "kernel.py").read_text(
         encoding="utf-8"
     )
-    dataset_dir = tmp_path / "downloads" / "kaggle_vendor_dataset"
-    assert (dataset_dir / "yt_dlp_vendor.zip").exists()
     assert "VENDOR_DATASET_SLUG" in kernel_source
     assert "kaggle_prepare_failed" in kernel_source
-    assert [
-        "datasets",
-        "create",
-        "-p",
-        str(dataset_dir),
-        "-q",
-        "--public",
-    ] in calls
+    assert "stable-vendor" in kernel_source
+    assert not any(call[:1] == ["datasets"] for call in calls)
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
     assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
@@ -567,6 +560,36 @@ def test_kaggle_batch_download_uses_configured_vendor_dataset(
     assert not any(call[:2] == ["datasets", "files"] for call in calls)
 
 
+def test_kaggle_batch_download_requires_vendor_dataset_ref(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "kaggle"
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+
+    monkeypatch.setenv("KAGGLE_USERNAME", "test-user")
+
+    try:
+        provider.download_many(
+            [
+                YouTubeVideo(
+                    id="video-1",
+                    trend_id="trend-1",
+                    title="Funny short",
+                    url="https://www.youtube.com/watch?v=video-1",
+                )
+            ],
+            tmp_path / "downloads",
+            max_successes=1,
+        )
+    except RuntimeError as exc:
+        assert "KAGGLE_VENDOR_DATASET_REF is required" in str(exc)
+    else:
+        raise AssertionError("Expected missing Kaggle vendor dataset ref to fail")
+
+
 def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
     tmp_path: Path,
     monkeypatch,
@@ -574,6 +597,7 @@ def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
     settings = make_settings(tmp_path)
     settings.use_real_media = True
     settings.download_backend = "kaggle"
+    settings.kaggle_vendor_dataset_ref = "test-user/stable-vendor"
     provider = KaggleYtDlpVideoDownloadProvider(settings)
 
     monkeypatch.setenv("KAGGLE_USERNAME", "test-user")
