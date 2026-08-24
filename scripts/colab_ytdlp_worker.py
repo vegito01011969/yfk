@@ -205,9 +205,11 @@ def main() -> None:
     downloads_dir.mkdir(parents=True, exist_ok=True)
 
     enable_browser_po_token = bool(job.get("enable_browser_po_token"))
-    install_commands = [
-        [sys.executable, "-m", "pip", "install", "--upgrade", job["yt_dlp_requirement"]],
-    ]
+    install_commands = []
+    if not job.get("skip_yt_dlp_install"):
+        install_commands.append(
+            [sys.executable, "-m", "pip", "install", "--upgrade", job["yt_dlp_requirement"]]
+        )
     if enable_browser_po_token:
         install_commands.append(
             [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp-getpot-wpc==1.1.2"]

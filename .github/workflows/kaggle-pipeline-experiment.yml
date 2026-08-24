@@ -56,7 +56,7 @@ jobs:
       KAGGLE_KERNEL_TITLE: Viral Pipeline yt-dlp Experiment ${{ github.run_id }}
       KAGGLE_COMMAND_TIMEOUT_SECONDS: "1800"
       KAGGLE_UPLOAD_YOUTUBE_COOKIES: "true"
-      KAGGLE_ENABLE_BROWSER_PO_TOKEN: "true"
+      KAGGLE_ENABLE_BROWSER_PO_TOKEN: "false"
 
     steps:
       - name: Check out repository

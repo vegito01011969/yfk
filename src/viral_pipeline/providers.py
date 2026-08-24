@@ -6,6 +6,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -13,6 +14,7 @@ import unicodedata
 import zipfile
 from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
+from importlib import util
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
@@ -2055,6 +2057,7 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
         kernel_ref = f"{owner}/{slug}"
         job = self._job_payload(videos, max_successes)
         metadata_path = kernel_dir / "kernel-metadata.json"
+        self._vendor_yt_dlp(kernel_dir)
         metadata_path.write_text(
             json.dumps(
                 {
@@ -2203,6 +2206,7 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             "extractor_args": extractor_args,
             "verbose": self.settings.yt_dlp_verbose,
             "yt_dlp_requirement": self.settings.kaggle_yt_dlp_requirement,
+            "skip_yt_dlp_install": True,
             "download_timeout_seconds": self.settings.yt_dlp_download_timeout_seconds,
             "batch_timeout_seconds": self.settings.max_download_stage_seconds,
             "enable_browser_po_token": self.settings.kaggle_enable_browser_po_token,
@@ -2229,6 +2233,10 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             f"EMBEDDED_COOKIES_TEXT = {json.dumps(embedded_cookies)}\n"
             "\n\n"
             "def _prepare_embedded_inputs() -> None:\n"
+            "    sys.path.insert(0, str(Path.cwd()))\n"
+            "    os.environ['PYTHONPATH'] = (\n"
+            "        str(Path.cwd()) + os.pathsep + os.environ.get('PYTHONPATH', '')\n"
+            "    )\n"
             "    REMOTE_DIR.mkdir(parents=True, exist_ok=True)\n"
             "    JOB_PATH.write_text(EMBEDDED_JOB_JSON, encoding='utf-8')\n"
             "    if EMBEDDED_COOKIES_TEXT:\n"
@@ -2251,6 +2259,20 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             1,
         )
         return worker_source
+
+    def _vendor_yt_dlp(self, kernel_dir: Path) -> None:
+        spec = util.find_spec("yt_dlp")
+        if not spec or not spec.submodule_search_locations:
+            raise RuntimeError("yt_dlp package is not installed locally and cannot be vendored")
+        source_dir = Path(next(iter(spec.submodule_search_locations)))
+        target_dir = kernel_dir / "yt_dlp"
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        shutil.copytree(
+            source_dir,
+            target_dir,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
 
     def _kaggle_owner(self) -> str:
         env_username = os.environ.get("KAGGLE_USERNAME", "").strip()
