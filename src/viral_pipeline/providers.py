@@ -2088,12 +2088,8 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
 
         try:
             self._run(["datasets", "create", "-p", str(dataset_dir), "-q"])
-            if not self._wait_for_dataset(vendor_ref):
-                return self._failed_batch(
-                    videos,
-                    error="kaggle_vendor_dataset_result_timeout",
-                    kind="download_infrastructure_error",
-                )
+            time.sleep(30)
+            self._run(["datasets", "files", vendor_ref])
             self._run(["kernels", "push", "-p", str(kernel_dir)])
             if not self._wait_for_kernel(kernel_ref):
                 return self._failed_batch(
@@ -2356,30 +2352,6 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
                 return True
             time.sleep(30)
         LOGGER.warning("Kaggle kernel %s did not finish within timeout", kernel_ref)
-        return False
-
-    def _wait_for_dataset(self, dataset_ref: str) -> bool:
-        deadline = time.monotonic() + max(60, self.settings.kaggle_command_timeout_seconds)
-        last_status = ""
-        while time.monotonic() < deadline:
-            result = self._run(["datasets", "status", dataset_ref])
-            status_text = (result.stdout or "").lower()
-            last_status = result.stdout
-            if any(value in status_text for value in ("complete", "ready", "succeeded")):
-                return True
-            if any(value in status_text for value in ("error", "failed", "cancel")):
-                LOGGER.warning(
-                    "Kaggle dataset %s ended unsuccessfully:\n%s",
-                    dataset_ref,
-                    result.stdout,
-                )
-                return False
-            time.sleep(15)
-        LOGGER.warning(
-            "Kaggle dataset %s did not become ready within timeout:\n%s",
-            dataset_ref,
-            last_status,
-        )
         return False
 
     def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
