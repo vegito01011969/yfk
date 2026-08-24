@@ -55,6 +55,7 @@ jobs:
       KAGGLE_KERNEL_SLUG: viral-pipeline-ytdlp-${{ github.run_id }}
       KAGGLE_KERNEL_TITLE: Viral Pipeline yt-dlp Experiment ${{ github.run_id }}
       KAGGLE_COMMAND_TIMEOUT_SECONDS: "1800"
+      KAGGLE_VENDOR_DATASET_REF: ${{ secrets.KAGGLE_VENDOR_DATASET_REF }}
       KAGGLE_UPLOAD_YOUTUBE_COOKIES: "true"
       KAGGLE_ENABLE_BROWSER_PO_TOKEN: "false"
 
@@ -196,6 +197,12 @@ jobs:
           kaggle config view
           kaggle kernels list --mine --page-size 1
 
+      - name: Validate Kaggle vendor dataset
+        run: |
+          VENDOR_REF="${KAGGLE_VENDOR_DATASET_REF:-${KAGGLE_USERNAME}/viral-pipeline-yt-dlp-vendor}"
+          echo "KAGGLE_VENDOR_DATASET_REF=${VENDOR_REF}" >> "$GITHUB_ENV"
+          kaggle datasets files "$VENDOR_REF"
+
       - name: Run Kaggle download experiment pipeline
         run: viral-pipeline run --no-resume
 
@@ -237,16 +244,12 @@ jobs:
         run: |
           mkdir -p workdir/kaggle-diagnostics
           KERNEL_REF="${KAGGLE_USERNAME}/${KAGGLE_KERNEL_SLUG}"
-          VENDOR_SLUG="${KAGGLE_KERNEL_SLUG}-vendor"
-          VENDOR_SLUG="${VENDOR_SLUG:0:50}"
-          VENDOR_REF="${KAGGLE_USERNAME}/${VENDOR_SLUG}"
+          VENDOR_REF="${KAGGLE_VENDOR_DATASET_REF:-${KAGGLE_USERNAME}/viral-pipeline-yt-dlp-vendor}"
           {
             echo "kernel_ref=${KERNEL_REF}"
             echo "vendor_ref=${VENDOR_REF}"
             echo "kaggle_version=$(kaggle --version 2>&1)"
           } > workdir/kaggle-diagnostics/summary.txt
-          kaggle datasets status "$VENDOR_REF" \
-            > workdir/kaggle-diagnostics/vendor-status.txt 2>&1 || true
           kaggle datasets files "$VENDOR_REF" \
             > workdir/kaggle-diagnostics/vendor-files.txt 2>&1 || true
           kaggle kernels status "$KERNEL_REF" \

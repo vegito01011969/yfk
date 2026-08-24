@@ -495,11 +495,81 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
         "-p",
         str(dataset_dir),
         "-q",
+        "--public",
     ] in calls
-    assert ["datasets", "files", "test-user/viral-pipeline-ytdlp-test-vendor"] in calls
+    assert ["datasets", "files", "test-user/viral-pipeline-yt-dlp-vendor"] in calls
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
     assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
+
+
+def test_kaggle_batch_download_uses_configured_vendor_dataset(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = make_settings(tmp_path)
+    settings.use_real_media = True
+    settings.download_backend = "kaggle"
+    settings.kaggle_kernel_slug = "viral-pipeline-ytdlp-test"
+    settings.kaggle_vendor_dataset_ref = "test-user/stable-vendor"
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+    calls: list[list[str]] = []
+
+    monkeypatch.setenv("KAGGLE_USERNAME", "test-user")
+    monkeypatch.setattr("viral_pipeline.providers.time.sleep", lambda seconds: None)
+
+    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ["datasets", "files"]:
+            return subprocess.CompletedProcess(args, 0, stdout="yt_dlp_vendor.zip\n")
+        if args[:2] == ["kernels", "status"]:
+            return subprocess.CompletedProcess(args, 0, stdout="complete\n")
+        if args[:2] == ["kernels", "output"]:
+            output_dir = Path(args[-1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            result_json = tmp_path / "result.json"
+            result_json.write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "successes": 1,
+                        "results": [{"video_id": "video-1", "status": "ok"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            media_path = tmp_path / "video-1.mp4"
+            media_path.write_text("media", encoding="utf-8")
+            with zipfile.ZipFile(output_dir / "result.zip", "w") as archive:
+                archive.write(result_json, "result.json")
+                archive.write(media_path, "video-1.mp4")
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(provider, "_run", fake_run)
+
+    downloaded, failed = provider.download_many(
+        [
+            YouTubeVideo(
+                id="video-1",
+                trend_id="trend-1",
+                title="Funny short",
+                url="https://www.youtube.com/watch?v=video-1",
+            )
+        ],
+        tmp_path / "downloads",
+        max_successes=1,
+    )
+
+    metadata = json.loads(
+        (tmp_path / "downloads" / "kaggle_kernel" / "kernel-metadata.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert [video.id for video in downloaded] == ["video-1"]
+    assert failed == []
+    assert metadata["dataset_sources"] == ["test-user/stable-vendor"]
+    assert not any(call[:2] == ["datasets", "create"] for call in calls)
+    assert ["datasets", "files", "test-user/stable-vendor"] in calls
 
 
 def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(

@@ -2056,11 +2056,12 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
         owner = self._kaggle_owner()
         slug = self._normalized_kernel_slug()
         kernel_ref = f"{owner}/{slug}"
-        vendor_slug = f"{slug}-vendor"[:50].strip("-")
-        vendor_ref = f"{owner}/{vendor_slug}"
+        vendor_ref = self._vendor_dataset_ref(owner, slug)
+        vendor_slug = vendor_ref.split("/", 1)[1]
         job = self._job_payload(videos, max_successes)
         metadata_path = kernel_dir / "kernel-metadata.json"
-        self._prepare_vendor_dataset(dataset_dir, vendor_ref, vendor_slug)
+        if not self.settings.kaggle_vendor_dataset_ref.strip():
+            self._prepare_vendor_dataset(dataset_dir, vendor_ref, vendor_slug)
         metadata_path.write_text(
             json.dumps(
                 {
@@ -2087,8 +2088,9 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
         )
 
         try:
-            self._run(["datasets", "create", "-p", str(dataset_dir), "-q"])
-            time.sleep(30)
+            if not self.settings.kaggle_vendor_dataset_ref.strip():
+                self._run(["datasets", "create", "-p", str(dataset_dir), "-q", "--public"])
+                time.sleep(90)
             self._run(["datasets", "files", vendor_ref])
             self._run(["kernels", "push", "-p", str(kernel_dir)])
             if not self._wait_for_kernel(kernel_ref):
@@ -2314,6 +2316,19 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
                 if not path.is_file() or path.suffix == ".pyc" or "__pycache__" in path.parts:
                     continue
                 archive.write(path, Path("yt_dlp") / path.relative_to(source_dir))
+
+    def _vendor_dataset_ref(self, owner: str, kernel_slug: str) -> str:
+        configured = self.settings.kaggle_vendor_dataset_ref.strip().lower()
+        if configured:
+            if "/" not in configured:
+                raise RuntimeError(
+                    "KAGGLE_VENDOR_DATASET_REF must be in owner/dataset-slug format"
+                )
+            return configured
+        vendor_slug = "viral-pipeline-yt-dlp-vendor"
+        if len(vendor_slug) > 50:
+            vendor_slug = f"{kernel_slug}-vendor"[:50].strip("-")
+        return f"{owner}/{vendor_slug}"
 
     def _kaggle_owner(self) -> str:
         env_username = os.environ.get("KAGGLE_USERNAME", "").strip()

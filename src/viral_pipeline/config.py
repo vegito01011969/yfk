@@ -184,6 +184,7 @@ class Settings(BaseSettings):
     kaggle_remote_dir: str = "/kaggle/working/viral_pipeline_download"
     kaggle_command_timeout_seconds: int = 1800
     kaggle_yt_dlp_requirement: str = "yt-dlp>=2025.9.26"
+    kaggle_vendor_dataset_ref: str = ""
     kaggle_upload_youtube_cookies: bool = True
     kaggle_enable_browser_po_token: bool = False
     render_width: int = 1080
