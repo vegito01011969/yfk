@@ -487,7 +487,9 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     assert "VENDOR_DATASET_SLUG" in kernel_source
     assert "kaggle_prepare_failed" in kernel_source
     assert "stable-vendor" in kernel_source
-    assert "kaggle-yt-dlp-vendor.zip" in kernel_source
+    assert "_package_parent" in kernel_source
+    assert "nested_zip_" in kernel_source
+    assert "yt_dlp package was not found in Kaggle inputs" in kernel_source
     assert not any(call[:1] == ["datasets"] for call in calls)
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
