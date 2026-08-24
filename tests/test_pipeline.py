@@ -483,7 +483,16 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     kernel_source = (tmp_path / "downloads" / "kaggle_kernel" / "kernel.py").read_text(
         encoding="utf-8"
     )
-    assert "EMBEDDED_YT_DLP_ZIP_B64" in kernel_source
+    dataset_dir = tmp_path / "downloads" / "kaggle_vendor_dataset"
+    assert (dataset_dir / "yt_dlp_vendor.zip").exists()
+    assert "VENDOR_DATASET_SLUG" in kernel_source
+    assert [
+        "datasets",
+        "create",
+        "-p",
+        str(dataset_dir),
+        "-q",
+    ] in calls
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
     assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
