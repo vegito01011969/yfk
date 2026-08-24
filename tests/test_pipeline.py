@@ -439,8 +439,6 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
 
     def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
         calls.append(args)
-        if args[:2] == ["datasets", "files"]:
-            return subprocess.CompletedProcess(args, 0, stdout="yt_dlp_vendor.zip\n")
         if args[:2] == ["kernels", "status"]:
             return subprocess.CompletedProcess(args, 0, stdout="complete\n")
         if args[:2] == ["kernels", "output"]:
@@ -497,7 +495,6 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
         "-q",
         "--public",
     ] in calls
-    assert ["datasets", "files", "test-user/viral-pipeline-yt-dlp-vendor"] in calls
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
     assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
@@ -520,8 +517,6 @@ def test_kaggle_batch_download_uses_configured_vendor_dataset(
 
     def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
         calls.append(args)
-        if args[:2] == ["datasets", "files"]:
-            return subprocess.CompletedProcess(args, 0, stdout="yt_dlp_vendor.zip\n")
         if args[:2] == ["kernels", "status"]:
             return subprocess.CompletedProcess(args, 0, stdout="complete\n")
         if args[:2] == ["kernels", "output"]:
@@ -569,7 +564,7 @@ def test_kaggle_batch_download_uses_configured_vendor_dataset(
     assert failed == []
     assert metadata["dataset_sources"] == ["test-user/stable-vendor"]
     assert not any(call[:2] == ["datasets", "create"] for call in calls)
-    assert ["datasets", "files", "test-user/stable-vendor"] in calls
+    assert not any(call[:2] == ["datasets", "files"] for call in calls)
 
 
 def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
@@ -585,8 +580,6 @@ def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
     monkeypatch.setattr("viral_pipeline.providers.time.sleep", lambda seconds: None)
 
     def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
-        if args[:2] == ["datasets", "files"]:
-            return subprocess.CompletedProcess(args, 0, stdout="yt_dlp_vendor.zip\n")
         if args[:2] == ["kernels", "status"]:
             return subprocess.CompletedProcess(args, 0, stdout="complete\n")
         if args[:2] == ["kernels", "output"]:

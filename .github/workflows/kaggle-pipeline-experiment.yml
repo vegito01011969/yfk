@@ -197,11 +197,11 @@ jobs:
           kaggle config view
           kaggle kernels list --mine --page-size 1
 
-      - name: Validate Kaggle vendor dataset
+      - name: Configure Kaggle vendor dataset
         run: |
           VENDOR_REF="${KAGGLE_VENDOR_DATASET_REF:-${KAGGLE_USERNAME}/viral-pipeline-yt-dlp-vendor}"
           echo "KAGGLE_VENDOR_DATASET_REF=${VENDOR_REF}" >> "$GITHUB_ENV"
-          kaggle datasets files "$VENDOR_REF"
+          echo "Using Kaggle vendor dataset: ${VENDOR_REF}"
 
       - name: Run Kaggle download experiment pipeline
         run: viral-pipeline run --no-resume
@@ -250,8 +250,6 @@ jobs:
             echo "vendor_ref=${VENDOR_REF}"
             echo "kaggle_version=$(kaggle --version 2>&1)"
           } > workdir/kaggle-diagnostics/summary.txt
-          kaggle datasets files "$VENDOR_REF" \
-            > workdir/kaggle-diagnostics/vendor-files.txt 2>&1 || true
           kaggle kernels status "$KERNEL_REF" \
             > workdir/kaggle-diagnostics/status.txt 2>&1 || true
           kaggle kernels files "$KERNEL_REF" \

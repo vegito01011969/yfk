@@ -2091,7 +2091,6 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             if not self.settings.kaggle_vendor_dataset_ref.strip():
                 self._run(["datasets", "create", "-p", str(dataset_dir), "-q", "--public"])
                 time.sleep(90)
-            self._run(["datasets", "files", vendor_ref])
             self._run(["kernels", "push", "-p", str(kernel_dir)])
             if not self._wait_for_kernel(kernel_ref):
                 return self._failed_batch(
