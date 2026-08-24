@@ -2268,7 +2268,18 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
             "def main() -> None:\n    job = json.loads(JOB_PATH.read_text(encoding=\"utf-8\"))",
             (
                 "def main() -> None:\n"
-                "    _prepare_embedded_inputs()\n"
+                "    try:\n"
+                "        _prepare_embedded_inputs()\n"
+                "    except Exception as exc:\n"
+                "        downloads_dir = REMOTE_DIR / 'downloads'\n"
+                "        downloads_dir.mkdir(parents=True, exist_ok=True)\n"
+                "        _write_result(\n"
+                "            'kaggle_prepare_failed',\n"
+                "            error=repr(exc),\n"
+                "            traceback=__import__('traceback').format_exc()[-8000:],\n"
+                "        )\n"
+                "        _write_archive(downloads_dir)\n"
+                "        return\n"
                 "    job = json.loads(JOB_PATH.read_text(encoding=\"utf-8\"))"
             ),
             1,
@@ -2377,6 +2388,14 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
     def _kaggle_output_listing(self, output_dir: Path) -> str:
         if not output_dir.exists():
             return f"Kaggle output directory does not exist: {output_dir}"
+        logs = [
+            f"===== {path.relative_to(output_dir)} =====\n"
+            f"{path.read_text(encoding='utf-8', errors='replace')[-3000:]}"
+            for path in sorted(output_dir.rglob("*.log"))
+            if path.is_file()
+        ]
+        if logs:
+            return "\n\n".join(logs)[-COMMAND_OUTPUT_SNIPPET_CHARS:]
         files = [
             f"{path.relative_to(output_dir)} ({path.stat().st_size} bytes)"
             for path in sorted(output_dir.rglob("*"))

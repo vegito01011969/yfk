@@ -486,6 +486,7 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     dataset_dir = tmp_path / "downloads" / "kaggle_vendor_dataset"
     assert (dataset_dir / "yt_dlp_vendor.zip").exists()
     assert "VENDOR_DATASET_SLUG" in kernel_source
+    assert "kaggle_prepare_failed" in kernel_source
     assert [
         "datasets",
         "create",
@@ -537,6 +538,19 @@ def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
     assert len(failed) == 1
     assert failed[0].metadata["download_error"] == "kaggle_kernel_missing_result_json"
     assert failed[0].metadata["download_error_kind"] == "download_infrastructure_error"
+
+
+def test_kaggle_missing_result_reports_log_content(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+    output_dir = tmp_path / "kaggle_output"
+    output_dir.mkdir()
+    (output_dir / "kernel.log").write_text("important kaggle traceback", encoding="utf-8")
+
+    listing = provider._kaggle_output_listing(output_dir)
+
+    assert "kernel.log" in listing
+    assert "important kaggle traceback" in listing
 
 
 def test_download_stage_records_failures_when_no_downloads_succeed(tmp_path: Path) -> None:
