@@ -480,7 +480,10 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
     assert [video.id for video in downloaded] == ["video-1"]
     assert downloaded[0].metadata["download_provider"] == "kaggle-yt-dlp"
     assert failed == []
-    assert (tmp_path / "downloads" / "kaggle_kernel" / "yt_dlp").is_dir()
+    kernel_source = (tmp_path / "downloads" / "kaggle_kernel" / "kernel.py").read_text(
+        encoding="utf-8"
+    )
+    assert "EMBEDDED_YT_DLP_ZIP_B64" in kernel_source
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
     assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
