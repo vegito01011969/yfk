@@ -439,6 +439,8 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
 
     def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
         calls.append(args)
+        if args[:2] == ["datasets", "status"]:
+            return subprocess.CompletedProcess(args, 0, stdout="complete\n")
         if args[:2] == ["kernels", "status"]:
             return subprocess.CompletedProcess(args, 0, stdout="complete\n")
         if args[:2] == ["kernels", "output"]:
@@ -494,6 +496,7 @@ def test_kaggle_batch_download_pushes_kernel_and_reads_output(
         str(dataset_dir),
         "-q",
     ] in calls
+    assert ["datasets", "status", "test-user/viral-pipeline-ytdlp-test-vendor"] in calls
     assert ["kernels", "push", "-p", str(tmp_path / "downloads" / "kaggle_kernel")] in calls
     assert ["kernels", "status", "test-user/viral-pipeline-ytdlp-test"] in calls
     assert calls[-1][:3] == ["kernels", "output", "test-user/viral-pipeline-ytdlp-test"]
@@ -512,6 +515,8 @@ def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
     monkeypatch.setattr("viral_pipeline.providers.time.sleep", lambda seconds: None)
 
     def fake_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["datasets", "status"]:
+            return subprocess.CompletedProcess(args, 0, stdout="complete\n")
         if args[:2] == ["kernels", "status"]:
             return subprocess.CompletedProcess(args, 0, stdout="complete\n")
         if args[:2] == ["kernels", "output"]:

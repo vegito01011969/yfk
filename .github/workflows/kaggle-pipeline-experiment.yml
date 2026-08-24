@@ -237,10 +237,18 @@ jobs:
         run: |
           mkdir -p workdir/kaggle-diagnostics
           KERNEL_REF="${KAGGLE_USERNAME}/${KAGGLE_KERNEL_SLUG}"
+          VENDOR_SLUG="${KAGGLE_KERNEL_SLUG}-vendor"
+          VENDOR_SLUG="${VENDOR_SLUG:0:50}"
+          VENDOR_REF="${KAGGLE_USERNAME}/${VENDOR_SLUG}"
           {
             echo "kernel_ref=${KERNEL_REF}"
+            echo "vendor_ref=${VENDOR_REF}"
             echo "kaggle_version=$(kaggle --version 2>&1)"
           } > workdir/kaggle-diagnostics/summary.txt
+          kaggle datasets status "$VENDOR_REF" \
+            > workdir/kaggle-diagnostics/vendor-status.txt 2>&1 || true
+          kaggle datasets files "$VENDOR_REF" \
+            > workdir/kaggle-diagnostics/vendor-files.txt 2>&1 || true
           kaggle kernels status "$KERNEL_REF" \
             > workdir/kaggle-diagnostics/status.txt 2>&1 || true
           kaggle kernels files "$KERNEL_REF" \
