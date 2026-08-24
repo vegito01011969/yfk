@@ -111,6 +111,25 @@ jobs:
           username = os.environ.get("KAGGLE_USERNAME", "").strip()
           key = os.environ.get("KAGGLE_KEY", "").strip()
 
+          def extract_legacy_credentials(raw: str) -> tuple[str, str] | None:
+              if not raw.lstrip().startswith("{"):
+                  return None
+              try:
+                  payload = json.loads(raw)
+              except json.JSONDecodeError:
+                  return None
+              parsed_username = str(payload.get("username") or "").strip()
+              parsed_key = str(payload.get("key") or "").strip()
+              if parsed_username and parsed_key:
+                  return parsed_username, parsed_key
+              return None
+
+          for raw_value in (key, api_token):
+              parsed = extract_legacy_credentials(raw_value)
+              if parsed:
+                  username, key = parsed
+                  break
+
           if username and key:
               legacy_path = kaggle_dir / "kaggle.json"
               legacy_path.write_text(
