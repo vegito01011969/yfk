@@ -590,6 +590,29 @@ def test_kaggle_batch_download_requires_vendor_dataset_ref(
         raise AssertionError("Expected missing Kaggle vendor dataset ref to fail")
 
 
+def test_kaggle_vendor_dataset_ref_accepts_kaggle_url(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.kaggle_vendor_dataset_ref = (
+        "https://www.kaggle.com/datasets/Test_User/viral-pipeline-yt-dlp-vendor"
+    )
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+
+    assert provider._vendor_dataset_ref() == "test_user/viral-pipeline-yt-dlp-vendor"
+
+
+def test_kaggle_vendor_dataset_ref_rejects_invalid_value(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.kaggle_vendor_dataset_ref = "viral-pipeline-yt-dlp-vendor"
+    provider = KaggleYtDlpVideoDownloadProvider(settings)
+
+    try:
+        provider._vendor_dataset_ref()
+    except RuntimeError as exc:
+        assert "owner/dataset-slug" in str(exc)
+    else:
+        raise AssertionError("Expected invalid Kaggle vendor dataset ref to fail")
+
+
 def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
     tmp_path: Path,
     monkeypatch,

@@ -204,7 +204,25 @@ jobs:
             echo "Create a public Kaggle dataset containing yt_dlp_vendor.zip, then set this secret to owner/dataset-slug."
             exit 1
           fi
-          echo "Using Kaggle vendor dataset: ${KAGGLE_VENDOR_DATASET_REF}"
+          VENDOR_REF="$(python - <<'PY'
+          import os
+          import re
+
+          raw = os.environ["KAGGLE_VENDOR_DATASET_REF"].strip().lower().rstrip("/")
+          raw = re.sub(r"^https?://(?:www\.)?kaggle\.com/datasets/", "", raw)
+          raw = re.sub(r"[?#].*$", "", raw)
+          parts = [part for part in raw.split("/") if part]
+          normalized = "/".join(parts[:2]) if len(parts) >= 2 else raw
+          if not re.fullmatch(r"[a-z0-9_-]+/[a-z0-9][a-z0-9_-]{2,49}", normalized):
+              raise SystemExit(
+                  "KAGGLE_VENDOR_DATASET_REF must be owner/dataset-slug "
+                  "or https://www.kaggle.com/datasets/owner/dataset-slug"
+              )
+          print(normalized)
+          PY
+          )"
+          echo "KAGGLE_VENDOR_DATASET_REF=${VENDOR_REF}" >> "$GITHUB_ENV"
+          echo "Using Kaggle vendor dataset: ${VENDOR_REF}"
 
       - name: Run Kaggle download experiment pipeline
         run: viral-pipeline run --no-resume

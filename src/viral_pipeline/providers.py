@@ -2282,15 +2282,30 @@ class KaggleYtDlpVideoDownloadProvider(ColabYtDlpVideoDownloadProvider):
         return worker_source
 
     def _vendor_dataset_ref(self) -> str:
-        configured = self.settings.kaggle_vendor_dataset_ref.strip().lower()
+        configured = self._normalize_kaggle_dataset_ref(
+            self.settings.kaggle_vendor_dataset_ref
+        )
         if not configured:
             raise RuntimeError(
                 "KAGGLE_VENDOR_DATASET_REF is required for the Kaggle download backend. "
                 "Create one public Kaggle dataset containing yt_dlp_vendor.zip and set "
                 "KAGGLE_VENDOR_DATASET_REF to owner/dataset-slug."
             )
-        if "/" not in configured:
-            raise RuntimeError("KAGGLE_VENDOR_DATASET_REF must be in owner/dataset-slug format")
+        if not re.fullmatch(r"[a-z0-9_-]+/[a-z0-9][a-z0-9_-]{2,49}", configured):
+            raise RuntimeError(
+                "KAGGLE_VENDOR_DATASET_REF must be owner/dataset-slug. "
+                "Use the Kaggle dataset URL path after /datasets/, for example "
+                "yourusername/viral-pipeline-yt-dlp-vendor."
+            )
+        return configured
+
+    def _normalize_kaggle_dataset_ref(self, value: str) -> str:
+        configured = value.strip().lower().removesuffix("/")
+        configured = re.sub(r"^https?://(?:www\.)?kaggle\.com/datasets/", "", configured)
+        configured = re.sub(r"[?#].*$", "", configured)
+        parts = [part for part in configured.split("/") if part]
+        if len(parts) >= 2:
+            return f"{parts[0]}/{parts[1]}"
         return configured
 
     def _kaggle_owner(self) -> str:
