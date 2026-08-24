@@ -53,8 +53,8 @@ jobs:
       KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-      KAGGLE_KERNEL_SLUG: viral-pipeline-ytdlp-${{ github.run_id }}
-      KAGGLE_KERNEL_TITLE: Viral Pipeline yt-dlp Experiment ${{ github.run_id }}
+      KAGGLE_KERNEL_SLUG: viral-pipeline-ytdlp-worker
+      KAGGLE_KERNEL_TITLE: Viral Pipeline yt-dlp Worker
       KAGGLE_COMMAND_TIMEOUT_SECONDS: "1800"
       KAGGLE_VENDOR_DATASET_REF: ${{ secrets.KAGGLE_VENDOR_DATASET_REF }}
       KAGGLE_UPLOAD_YOUTUBE_COOKIES: "true"
@@ -197,6 +197,18 @@ jobs:
         run: |
           kaggle config view
           kaggle kernels list --mine --page-size 1
+
+      - name: Report Kaggle notebook internet setup
+        run: |
+          {
+            echo "## Kaggle Notebook Internet Setup"
+            echo
+            echo "This workflow reuses one Kaggle notebook so Internet can be enabled once."
+            echo
+            echo "- Notebook: https://www.kaggle.com/code/${KAGGLE_USERNAME}/${KAGGLE_KERNEL_SLUG}"
+            echo "- Required one-time action: open the notebook in Kaggle, verify the account/phone if needed, then enable Internet in the notebook/session settings."
+            echo "- The pipeline metadata already sets enable_internet=true, but Kaggle API-created notebooks may still require the UI toggle."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Configure Kaggle vendor dataset
         run: |

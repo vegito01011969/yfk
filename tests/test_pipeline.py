@@ -679,6 +679,20 @@ def test_kaggle_vendor_dataset_ref_rejects_invalid_value(tmp_path: Path) -> None
         raise AssertionError("Expected invalid Kaggle vendor dataset ref to fail")
 
 
+def test_kaggle_experiment_reuses_stable_notebook_slug() -> None:
+    workflow_path = (
+        Path(__file__).resolve().parent.parent
+        / ".github"
+        / "workflows"
+        / "kaggle-pipeline-experiment.yml"
+    )
+    workflow = workflow_path.read_text(encoding="utf-8")
+
+    assert "KAGGLE_KERNEL_SLUG: viral-pipeline-ytdlp-worker" in workflow
+    assert "KAGGLE_KERNEL_SLUG: viral-pipeline-ytdlp-${{ github.run_id }}" not in workflow
+    assert "Kaggle Notebook Internet Setup" in workflow
+
+
 def test_kaggle_batch_download_marks_missing_result_as_infrastructure_failure(
     tmp_path: Path,
     monkeypatch,
