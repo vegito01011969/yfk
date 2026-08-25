@@ -77,6 +77,26 @@ def _install_deno() -> Path | None:
     return None
 
 
+def _install_ytdlp_binary() -> Path | None:
+    binary_path = REMOTE_DIR / "yt-dlp"
+    result = _run_best_effort(
+        [
+            "bash",
+            "-lc",
+            (
+                "set -e; "
+                f"curl -fL --retry 3 -o {binary_path} "
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp; "
+                f"chmod +x {binary_path}; "
+                f"{binary_path} --version"
+            ),
+        ]
+    )
+    if result.returncode == 0 and binary_path.exists():
+        return binary_path
+    return None
+
+
 def _install_chrome() -> Path | None:
     existing = _chrome_path()
     if existing:
@@ -114,11 +134,7 @@ def _chrome_path() -> str | None:
 def _js_runtime_arg(configured: object, deno_path: Path | None) -> str | None:
     configured_text = str(configured or "").strip()
     if deno_path:
-        deno_arg = f"deno:{deno_path}"
-        if not configured_text:
-            return deno_arg
-        if "deno" not in configured_text:
-            return f"{deno_arg},{configured_text}"
+        return f"deno:{deno_path}"
     return configured_text or None
 
 
@@ -157,6 +173,7 @@ def _download_one(
     video: dict[str, object],
     job: dict[str, object],
     downloads_dir: Path,
+    ytdlp_binary_path: Path | None,
     deno_path: Path | None,
     chrome_path: Path | None,
     enable_browser_po_token: bool,
@@ -164,28 +181,32 @@ def _download_one(
     video_id = str(video["id"])
     output_template = downloads_dir / f"{video_id}.%(ext)s"
 
-    base_command = [
-        sys.executable,
-        "-m",
-        "yt_dlp",
-        "--no-playlist",
-        "--restrict-filenames",
-        "--write-info-json",
-        "--merge-output-format",
-        "mp4",
-        "--retries",
-        "10",
-        "--fragment-retries",
-        "10",
-        "--socket-timeout",
-        "20",
-        "--retry-sleep",
-        "exp=1:20",
-        "-f",
-        str(job["format"]),
-        "-o",
-        str(output_template),
-    ]
+    base_command = (
+        [str(ytdlp_binary_path)]
+        if ytdlp_binary_path
+        else [sys.executable, "-m", "yt_dlp"]
+    )
+    base_command.extend(
+        [
+            "--no-playlist",
+            "--restrict-filenames",
+            "--write-info-json",
+            "--merge-output-format",
+            "mp4",
+            "--retries",
+            "10",
+            "--fragment-retries",
+            "10",
+            "--socket-timeout",
+            "20",
+            "--retry-sleep",
+            "exp=1:20",
+            "-f",
+            str(job["format"]),
+            "-o",
+            str(output_template),
+        ]
+    )
 
     cookies_path = REMOTE_DIR / "cookies.txt"
     if cookies_path.exists():
@@ -252,13 +273,16 @@ def _download_one(
 
     stdout = "\n".join(str(failure.get("stdout") or "") for failure in failures)
     stderr = "\n".join(str(failure.get("stderr") or "") for failure in failures)
+    attempt_summary = "attempts=" + ",".join(
+        str(failure.get("command") or []) for failure in failures
+    )
     return {
         "video_id": video_id,
         "status": "download_failed",
         "command": failures[-1].get("command") if failures else base_command,
         "returncode": failures[-1].get("returncode") if failures else None,
         "stdout": stdout[-8000:],
-        "stderr": stderr[-8000:],
+        "stderr": f"{stderr}\n{attempt_summary}"[-8000:],
         "attempts": failures,
     }
 
@@ -314,6 +338,7 @@ def main() -> None:
             return
 
     deno_path = _install_deno()
+    ytdlp_binary_path = _install_ytdlp_binary()
     chrome_path = _install_chrome() if enable_browser_po_token else None
     wpc_patch_path = _patch_wpc_provider_for_colab() if enable_browser_po_token else None
 
@@ -340,6 +365,7 @@ def main() -> None:
             video=video,
             job=job,
             downloads_dir=downloads_dir,
+            ytdlp_binary_path=ytdlp_binary_path,
             deno_path=deno_path,
             chrome_path=chrome_path,
             enable_browser_po_token=enable_browser_po_token,
@@ -353,6 +379,7 @@ def main() -> None:
     _write_result(
         "ok" if successes else "download_failed",
         deno_path=str(deno_path) if deno_path else None,
+        ytdlp_binary_path=str(ytdlp_binary_path) if ytdlp_binary_path else None,
         chrome_path=str(chrome_path) if chrome_path else None,
         network_check=network_check,
         wpc_patch_path=wpc_patch_path,

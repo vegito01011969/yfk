@@ -398,6 +398,7 @@ def test_colab_worker_retries_ejs_failures_with_remote_components(
             "download_timeout_seconds": 30,
         },
         downloads_dir=tmp_path,
+        ytdlp_binary_path=None,
         deno_path=Path("/tmp/deno"),
         chrome_path=None,
         enable_browser_po_token=False,
@@ -407,6 +408,47 @@ def test_colab_worker_retries_ejs_failures_with_remote_components(
     assert commands[0].count("--remote-components") == 0
     assert commands[1][commands[1].index("--remote-components") + 1] == "ejs:github"
     assert commands[2][commands[2].index("--remote-components") + 1] == "ejs:npm"
+
+
+def test_colab_worker_prefers_official_ytdlp_binary(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    worker = load_colab_worker_script()
+    commands: list[list[str]] = []
+    binary_path = tmp_path / "yt-dlp"
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(worker.subprocess, "run", fake_run)
+
+    result = worker._download_one(
+        video={"id": "video-1", "url": "https://www.youtube.com/watch?v=video-1"},
+        job={
+            "format": "best",
+            "js_runtimes": "deno:/tmp/deno",
+            "extractor_args": [],
+            "download_timeout_seconds": 30,
+        },
+        downloads_dir=tmp_path,
+        ytdlp_binary_path=binary_path,
+        deno_path=Path("/tmp/deno"),
+        chrome_path=None,
+        enable_browser_po_token=False,
+    )
+
+    assert result["status"] == "ok"
+    assert commands[0][0] == str(binary_path)
+    assert "-m" not in commands[0][:3]
 
 
 def test_build_providers_can_select_colab_download_backend(tmp_path: Path) -> None:
