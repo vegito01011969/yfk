@@ -109,9 +109,11 @@ class TransformPlan:
     audio_eq_gain_db: float
     audio_eq2_frequency_hz: int
     audio_eq2_gain_db: float
+    audio_spectral_eq_bands: list[dict[str, Any]]
     audio_bass_gain_db: float
     audio_treble_gain_db: float
     audio_stereo_mix: float
+    audio_phase_invert_mix: float
     audio_echo_delay_ms: int
     audio_echo_decay: float
     audio_compand_points: str
@@ -170,6 +172,7 @@ class TransformPlan:
     audio_bed_noise_amplitude: float
     audio_bed_mod_frequency_hz: float
     audio_generated_layers: list[dict[str, Any]]
+    audio_harmonic_layers: list[dict[str, Any]]
     crf: int
     preset: str
     tune: str | None
@@ -493,6 +496,22 @@ def build_plan(
                 ["libmp3lame", "libopus"],
             ]
         )
+    spectral_band_count = 1 if stress_level < 3 else rng.randint(3, 7)
+    if stress_level >= 5:
+        spectral_band_count = rng.randint(6, 10)
+    audio_spectral_eq_bands = [
+        {
+            "frequency_hz": rng.choice(
+                [70, 95, 140, 210, 330, 510, 760, 1100, 1650, 2400, 3600, 5200, 7600, 10800]
+            ),
+            "width": rng.uniform(0.28, 1.8),
+            "gain_db": rng.uniform(
+                -1.6 if stress_level < 4 else -4.8,
+                1.6 if stress_level < 4 else 4.8,
+            ),
+        }
+        for _ in range(spectral_band_count)
+    ]
     audio_generated_layers: list[dict[str, Any]] = []
     if stress_level >= 3:
         layer_count = rng.randint(1, 2)
@@ -550,6 +569,30 @@ def build_plan(
                         "volume_db": rng.uniform(-11.0, -3.0),
                     }
                 )
+    audio_harmonic_layers: list[dict[str, Any]] = []
+    if stress_level >= 4:
+        harmonic_count = rng.randint(1, 2)
+        if stress_level >= 6:
+            harmonic_count = rng.randint(2, 4)
+        for _ in range(harmonic_count):
+            pitch_factor = rng.choice(
+                [
+                    rng.uniform(0.925, 0.972),
+                    rng.uniform(1.028, 1.085),
+                    rng.uniform(0.965, 0.992),
+                    rng.uniform(1.008, 1.038),
+                ]
+            )
+            audio_harmonic_layers.append(
+                {
+                    "pitch_factor": pitch_factor,
+                    "volume_db": rng.uniform(-24.0, -13.0),
+                    "delay_ms": rng.uniform(5.0, 38.0),
+                    "pan": rng.uniform(-0.62, 0.62),
+                    "highpass_hz": rng.randint(120, 850),
+                    "lowpass_hz": rng.randint(2600, 11500),
+                }
+            )
     operations = [
         {"category": "benchmark", "name": f"level_{stress_level}", "severity": stress_level},
         {
@@ -628,6 +671,22 @@ def build_plan(
                 "category": "audio",
                 "name": "random_low_volume_synthetic_audio_layers",
                 "severity": len(audio_generated_layers),
+            }
+        )
+    if audio_harmonic_layers:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "parallel_multi_pitch_harmonic_layers",
+                "severity": len(audio_harmonic_layers),
+            }
+        )
+    if audio_spectral_eq_bands:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "dense_spectral_analyzer_style_eq",
+                "severity": len(audio_spectral_eq_bands),
             }
         )
     if stress_level >= 2:
@@ -798,9 +857,13 @@ def build_plan(
         audio_eq_gain_db=rng.uniform(-3.0, 3.0),
         audio_eq2_frequency_hz=rng.choice([700, 950, 1400, 2200, 4200, 6800, 9200]),
         audio_eq2_gain_db=rng.uniform(-2.4, 2.4),
+        audio_spectral_eq_bands=audio_spectral_eq_bands,
         audio_bass_gain_db=rng.uniform(-2.5, 2.5),
         audio_treble_gain_db=rng.uniform(-2.5, 2.5),
         audio_stereo_mix=rng.uniform(0.015, 0.105 if stress_level >= 4 else 0.055),
+        audio_phase_invert_mix=(
+            0.0 if stress_level < 3 else rng.uniform(0.010, 0.095 if stress_level >= 5 else 0.045)
+        ),
         audio_echo_delay_ms=audio_echo_delay_ms,
         audio_echo_decay=audio_echo_decay,
         audio_compand_points=rng.choice(
@@ -869,6 +932,7 @@ def build_plan(
         audio_bed_noise_amplitude=audio_bed_noise_amplitude,
         audio_bed_mod_frequency_hz=rng.uniform(0.10, 0.18),
         audio_generated_layers=audio_generated_layers,
+        audio_harmonic_layers=audio_harmonic_layers,
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
@@ -1042,6 +1106,8 @@ def audio_filter(plan: TransformPlan) -> str:
     pitch_inverse = 1.0 / max(0.5, min(2.0, plan.audio_pitch_factor))
     left_mix = 1.0 - plan.audio_stereo_mix
     cross_mix = plan.audio_stereo_mix
+    phase_keep = 1.0 - plan.audio_phase_invert_mix
+    phase_flip = plan.audio_phase_invert_mix
     filters = [
         "aformat=sample_fmts=fltp:channel_layouts=stereo",
         "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20",
@@ -1068,10 +1134,16 @@ def audio_filter(plan: TransformPlan) -> str:
             f"equalizer=f={plan.audio_eq2_frequency_hz}:"
             f"width_type=o:width=0.9:g={plan.audio_eq2_gain_db:.3f}"
         ),
+        *spectral_eq_filters(plan),
         (
             "pan=stereo|"
             f"c0={left_mix:.5f}*c0+{cross_mix:.5f}*c1|"
             f"c1={cross_mix:.5f}*c0+{left_mix:.5f}*c1"
+        ),
+        (
+            "pan=stereo|"
+            f"c0={phase_keep:.5f}*c0-{phase_flip:.5f}*c1|"
+            f"c1={phase_keep:.5f}*c1-{phase_flip:.5f}*c0"
         ),
         (
             f"afftdn=nr={plan.audio_fft_noise_reduction:.5f}:"
@@ -1202,6 +1274,18 @@ def audio_filter(plan: TransformPlan) -> str:
     return ",".join(filters)
 
 
+def spectral_eq_filters(plan: TransformPlan) -> list[str]:
+    filters: list[str] = []
+    for band in plan.audio_spectral_eq_bands:
+        frequency_hz = int(band.get("frequency_hz") or 1000)
+        width = float(band.get("width") or 1.0)
+        gain_db = float(band.get("gain_db") or 0.0)
+        filters.append(
+            f"equalizer=f={frequency_hz}:width_type=o:width={width:.5f}:g={gain_db:.5f}"
+        )
+    return filters
+
+
 def write_audio_impulse_response(path: Path, plan: TransformPlan) -> None:
     sample_rate = 48000
     sample_count = max(128, int(sample_rate * plan.audio_room_tail_ms / 1000))
@@ -1269,6 +1353,33 @@ def generated_audio_layer_filter(layer: dict[str, Any], duration: float, label: 
         f"tremolo=f={tremolo_hz:.6f}:d={tremolo_depth:.5f},"
         f"volume={volume_db:.5f}dB,"
         f"asetpts=PTS-STARTPTS[{label}]"
+    )
+
+
+def harmonic_audio_layer_filter(layer: dict[str, Any], duration: float, label: str) -> str:
+    pitch_factor = max(0.72, min(1.35, float(layer.get("pitch_factor") or 1.0)))
+    pitch_inverse = 1.0 / pitch_factor
+    volume_db = float(layer.get("volume_db") or -18.0)
+    delay_ms = max(0.0, float(layer.get("delay_ms") or 0.0))
+    pan = max(-0.95, min(0.95, float(layer.get("pan") or 0.0)))
+    highpass_hz = int(layer.get("highpass_hz") or 180)
+    lowpass_hz = int(layer.get("lowpass_hz") or 7200)
+    left_gain = 1.0 - max(0.0, pan)
+    right_gain = 1.0 + min(0.0, pan)
+    return (
+        "[0:a:0]"
+        "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+        "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20,"
+        f"highpass=f={highpass_hz},lowpass=f={lowpass_hz},"
+        f"asetrate={48000 * pitch_factor:.5f},"
+        "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20,"
+        f"atempo={pitch_inverse:.8f},"
+        f"adelay={delay_ms:.5f}:all=1,"
+        f"volume={volume_db:.5f}dB,"
+        "pan=stereo|"
+        f"c0={left_gain:.5f}*c0|"
+        f"c1={right_gain:.5f}*c1,"
+        f"atrim=duration={duration:.5f},asetpts=PTS-STARTPTS[{label}]"
     )
 
 
@@ -1340,6 +1451,10 @@ def audio_filter_graph(
     for index, layer in enumerate(plan.audio_generated_layers):
         label = f"alayer{index}"
         parts.append(generated_audio_layer_filter(layer, duration, label))
+        mix_inputs.append(f"[{label}]")
+    for index, layer in enumerate(plan.audio_harmonic_layers):
+        label = f"aharm{index}"
+        parts.append(harmonic_audio_layer_filter(layer, duration, label))
         mix_inputs.append(f"[{label}]")
     if len(mix_inputs) == 1:
         parts.append("[a0]anull[aout]")

@@ -89,6 +89,21 @@ def load_colab_worker_script():
     return module
 
 
+def load_robustness_transform_script():
+    tool_dir = Path(__file__).resolve().parent.parent / "provenance_robustness_tool"
+    script_path = tool_dir / "transform.py"
+    spec = util.spec_from_file_location("robustness_transform", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = util.module_from_spec(spec)
+    sys.modules["robustness_transform"] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop("robustness_transform", None)
+    return module
+
+
 def test_full_local_pipeline_persists_publish_package(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     store = PipelineStore(settings.pipeline_db_path)
@@ -231,6 +246,32 @@ def test_provenance_transform_passes_configured_level(tmp_path: Path, monkeypatc
     assert output_path.read_text(encoding="utf-8") == "transformed-media"
     assert "--level" in commands[0]
     assert commands[0][commands[0].index("--level") + 1] == "2"
+
+
+def test_robustness_transform_level_six_uses_complex_audio_graph() -> None:
+    transform = load_robustness_transform_script()
+    info = transform.VideoInfo(
+        width=1080,
+        height=1920,
+        duration=18.0,
+        fps=30.0,
+        has_audio=True,
+        video_codec="h264",
+        audio_codec="aac",
+    )
+    plan = transform.build_plan(info, seed=12345, attempt=0, stress_level=6)
+    graph = transform.audio_filter_graph(plan, duration_seconds=info.duration)
+
+    assert plan.audio_harmonic_layers
+    assert len(plan.audio_spectral_eq_bands) >= 6
+    assert plan.audio_phase_invert_mix > 0
+    assert "parallel_multi_pitch_harmonic_layers" in {
+        operation["name"] for operation in plan.operations
+    }
+    assert graph.count("equalizer=f=") >= 8
+    assert "aphaseshift=" in graph
+    assert "aharm0" in graph
+    assert "amix=inputs=" in graph
 
 
 def test_ytdlp_download_uses_configured_cookies_file(tmp_path: Path, monkeypatch) -> None:
