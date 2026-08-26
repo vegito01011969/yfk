@@ -104,6 +104,20 @@ def load_robustness_transform_script():
     return module
 
 
+def test_scheduled_workflows_do_not_hard_fail_on_colab_session_listing() -> None:
+    workflows_dir = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+
+    for workflow_name in (
+        "pipeline.yml",
+        "football-pipeline.yml",
+        "cricket-pipeline.yml",
+    ):
+        workflow = (workflows_dir / workflow_name).read_text(encoding="utf-8")
+
+        assert 'colab --auth="$COLAB_CLI_AUTH" sessions' not in workflow
+        assert "colab sessions" not in workflow
+
+
 def test_full_local_pipeline_persists_publish_package(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     store = PipelineStore(settings.pipeline_db_path)

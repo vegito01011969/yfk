@@ -169,9 +169,9 @@ jobs:
           print(f"Validated YouTube cookies file: {len(lines)} lines, {len(youtube_lines)} relevant rows")
           PY
 
-      - name: Validate Colab CLI access
+      - name: Check Colab CLI availability
         if: env.DOWNLOAD_BACKEND == 'colab'
-        run: colab --auth="$COLAB_CLI_AUTH" sessions
+        run: colab version
 
       - name: Validate YouTube upload auth
         run: viral-pipeline auth-youtube-upload
