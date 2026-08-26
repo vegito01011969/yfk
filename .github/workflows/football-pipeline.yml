@@ -3,7 +3,7 @@ name: scheduled-football-shorts-pipeline
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 1,13 * * *"
+    - cron: "0 1,7,13,19 * * *"
 
 concurrency:
   group: football-youtube-shorts-pipeline
