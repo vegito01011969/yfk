@@ -130,6 +130,9 @@ class TransformPlan:
     audio_fft_noise_floor: float
     audio_phase_shift: float
     audio_phase_order: int
+    audio_frequency_shift_enabled: bool
+    audio_frequency_shift_hz: float
+    audio_frequency_shift_level: float
     audio_tilt_frequency_hz: int
     audio_tilt_slope: float
     audio_crystalizer_intensity: float
@@ -173,6 +176,9 @@ class TransformPlan:
     audio_bed_mod_frequency_hz: float
     audio_generated_layers: list[dict[str, Any]]
     audio_harmonic_layers: list[dict[str, Any]]
+    audio_spectral_inversion_layers: list[dict[str, Any]]
+    audio_spectrogram_perturbation_layers: list[dict[str, Any]]
+    audio_chop_layers: list[dict[str, Any]]
     crf: int
     preset: str
     tune: str | None
@@ -593,6 +599,61 @@ def build_plan(
                     "lowpass_hz": rng.randint(2600, 11500),
                 }
             )
+    audio_spectral_inversion_layers: list[dict[str, Any]] = []
+    if stress_level >= 5:
+        inversion_count = rng.randint(1, 2)
+        if stress_level >= 6:
+            inversion_count = rng.randint(2, 3)
+        for _ in range(inversion_count):
+            audio_spectral_inversion_layers.append(
+                {
+                    "carrier_hz": rng.choice([2400, 3200, 4100, 5200, 6400, 7800]),
+                    "highpass_hz": rng.randint(120, 900),
+                    "lowpass_hz": rng.randint(3600, 11800),
+                    "volume_db": rng.uniform(-32.0, -18.0),
+                    "delay_ms": rng.uniform(6.0, 46.0),
+                    "pan": rng.uniform(-0.70, 0.70),
+                }
+            )
+    audio_spectrogram_perturbation_layers: list[dict[str, Any]] = []
+    if stress_level >= 4:
+        perturb_count = rng.randint(1, 2)
+        if stress_level >= 6:
+            perturb_count = rng.randint(2, 4)
+        for _ in range(perturb_count):
+            center_hz = rng.choice([180, 260, 420, 700, 1100, 1800, 2900, 4700, 7600])
+            width_hz = rng.randint(90, 980 if center_hz < 2000 else 1800)
+            audio_spectrogram_perturbation_layers.append(
+                {
+                    "color": rng.choice(["white", "pink", "violet"]),
+                    "amplitude": rng.uniform(0.00008, 0.0009),
+                    "highpass_hz": max(20, center_hz - width_hz),
+                    "lowpass_hz": min(16000, center_hz + width_hz),
+                    "tremolo_hz": rng.uniform(0.35, 4.8),
+                    "tremolo_depth": rng.uniform(0.28, 0.82),
+                    "delay_ms": rng.uniform(0.0, 85.0),
+                    "volume_db": rng.uniform(-28.0, -14.0),
+                }
+            )
+    audio_chop_layers: list[dict[str, Any]] = []
+    if stress_level >= 5 and info.duration >= 4.0:
+        chop_count = rng.randint(1, 2)
+        if stress_level >= 6 and info.duration >= 7.0:
+            chop_count = rng.randint(2, 4)
+        safe_duration = max(0.5, info.duration - 0.75)
+        for _ in range(chop_count):
+            segment_duration = rng.uniform(0.055, 0.22)
+            audio_chop_layers.append(
+                {
+                    "start_seconds": rng.uniform(0.25, safe_duration),
+                    "duration_seconds": min(segment_duration, max(0.04, safe_duration / 5)),
+                    "delay_ms": rng.uniform(120.0, max(160.0, info.duration * 870.0)),
+                    "volume_db": rng.uniform(-30.0, -16.0),
+                    "reverse": rng.random() < 0.35,
+                    "tempo": rng.uniform(0.92, 1.10),
+                    "pan": rng.uniform(-0.85, 0.85),
+                }
+            )
     operations = [
         {"category": "benchmark", "name": f"level_{stress_level}", "severity": stress_level},
         {
@@ -681,6 +742,30 @@ def build_plan(
                 "severity": len(audio_harmonic_layers),
             }
         )
+    if audio_spectral_inversion_layers:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "low_volume_spectral_inversion_layers",
+                "severity": len(audio_spectral_inversion_layers),
+            }
+        )
+    if audio_spectrogram_perturbation_layers:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "spectrogram_perturbation_noise_bands",
+                "severity": len(audio_spectrogram_perturbation_layers),
+            }
+        )
+    if audio_chop_layers:
+        operations.append(
+            {
+                "category": "audio",
+                "name": "micro_chop_reordered_audio_snippets",
+                "severity": len(audio_chop_layers),
+            }
+        )
     if audio_spectral_eq_bands:
         operations.append(
             {
@@ -743,12 +828,19 @@ def build_plan(
                 "severity": "high",
             }
         )
+        operations.append(
+            {
+                "category": "audio",
+                "name": "frequency_shift_spectral_phase_stress",
+                "severity": "high",
+            }
+        )
     audio_pitch_span = 0.0 if stress_level < 2 else 0.006 + stress_level * 0.0028
     audio_pitch_factor = rng.uniform(1.0 - audio_pitch_span, 1.0 + audio_pitch_span)
     audio_sample_rate = rng.choice(
         [44100, 48000]
         if stress_level < 3
-        else [32000, 44100, 48000, 48000, 88200]
+        else [24000, 32000, 44100, 48000, 48000, 88200, 96000]
     )
     audio_echo_delay_ms = 0
     audio_echo_decay = 0.0
@@ -772,6 +864,7 @@ def build_plan(
     audio_dynamic_eq_enabled = stress_level >= 4 and rng.random() < 0.78
     audio_rubberband_enabled = stress_level >= 5 and rng.random() < 0.72
     audio_crusher_enabled = stress_level >= 4 and rng.random() < 0.58
+    audio_frequency_shift_enabled = stress_level >= 5 and rng.random() < 0.82
     audio_dynaudnorm_enabled = stress_level >= 3 and rng.random() < 0.72
     audio_speechnorm_enabled = stress_level >= 5 and rng.random() < 0.42
     audio_room_enabled = stress_level >= 4 and rng.random() < 0.80
@@ -851,8 +944,8 @@ def build_plan(
         audio_volume_db=rng.uniform(-2.2, 2.2),
         audio_highpass_hz=rng.randint(14, 95 if stress_level >= 4 else 55),
         audio_lowpass_hz=rng.randint(11800 if stress_level >= 4 else 14500, 20500),
-        audio_compressor_threshold_db=rng.uniform(-30.0, -12.0),
-        audio_compressor_ratio=rng.uniform(1.12, 2.25 if stress_level >= 4 else 1.55),
+        audio_compressor_threshold_db=rng.uniform(-34.0, -10.0),
+        audio_compressor_ratio=rng.uniform(1.12, 3.4 if stress_level >= 5 else 2.25),
         audio_eq_frequency_hz=rng.choice([120, 180, 240, 320, 480, 3600, 5200, 7200]),
         audio_eq_gain_db=rng.uniform(-3.0, 3.0),
         audio_eq2_frequency_hz=rng.choice([700, 950, 1400, 2200, 4200, 6800, 9200]),
@@ -888,6 +981,16 @@ def build_plan(
         audio_fft_noise_floor=rng.uniform(-64.0, -38.0),
         audio_phase_shift=0.0 if stress_level < 2 else rng.uniform(-0.18, 0.18),
         audio_phase_order=rng.choice([4, 6, 8, 10, 12]),
+        audio_frequency_shift_enabled=audio_frequency_shift_enabled,
+        audio_frequency_shift_hz=rng.choice(
+            [
+                rng.uniform(-18.0, -4.0),
+                rng.uniform(4.0, 18.0),
+                rng.uniform(-42.0, -16.0),
+                rng.uniform(16.0, 42.0),
+            ]
+        ),
+        audio_frequency_shift_level=rng.uniform(0.82, 0.97),
         audio_tilt_frequency_hz=rng.choice([1800, 2600, 4200, 6200, 9000]),
         audio_tilt_slope=0.0 if stress_level < 2 else rng.uniform(-0.18, 0.18),
         audio_crystalizer_intensity=(
@@ -918,9 +1021,9 @@ def build_plan(
         audio_rubberband_tempo=rng.uniform(0.992, 1.010),
         audio_rubberband_pitch=rng.uniform(0.982, 1.022),
         audio_crusher_enabled=audio_crusher_enabled,
-        audio_crusher_bits=rng.uniform(10.5, 15.5),
-        audio_crusher_samples=rng.uniform(1.0, 2.8),
-        audio_crusher_mix=rng.uniform(0.018, 0.085),
+        audio_crusher_bits=rng.uniform(7.5 if stress_level >= 6 else 10.5, 15.5),
+        audio_crusher_samples=rng.uniform(1.0, 4.8 if stress_level >= 6 else 2.8),
+        audio_crusher_mix=rng.uniform(0.018, 0.145 if stress_level >= 6 else 0.085),
         audio_dynaudnorm_enabled=audio_dynaudnorm_enabled,
         audio_dynaudnorm_frame_ms=rng.choice([80, 120, 160, 240, 320]),
         audio_dynaudnorm_compress=rng.uniform(1.2, 5.0),
@@ -933,6 +1036,9 @@ def build_plan(
         audio_bed_mod_frequency_hz=rng.uniform(0.10, 0.18),
         audio_generated_layers=audio_generated_layers,
         audio_harmonic_layers=audio_harmonic_layers,
+        audio_spectral_inversion_layers=audio_spectral_inversion_layers,
+        audio_spectrogram_perturbation_layers=audio_spectrogram_perturbation_layers,
+        audio_chop_layers=audio_chop_layers,
         crf=rng.randint(*profile.crf_range),
         preset=rng.choice(["medium", "slow", "veryslow"]),
         tune=rng.choice([None, None, "film", "grain", "fastdecode"]),
@@ -1182,6 +1288,13 @@ def audio_filter(plan: TransformPlan) -> str:
             f"mode={plan.audio_dynamic_eq_mode}:"
             "auto=adaptive"
         )
+    if plan.audio_frequency_shift_enabled:
+        filters.append(
+            "afreqshift="
+            f"shift={plan.audio_frequency_shift_hz:.5f}:"
+            f"level={plan.audio_frequency_shift_level:.5f}:"
+            f"order={plan.audio_phase_order}"
+        )
     if plan.audio_dynaudnorm_enabled:
         filters.append(
             "dynaudnorm="
@@ -1383,6 +1496,92 @@ def harmonic_audio_layer_filter(layer: dict[str, Any], duration: float, label: s
     )
 
 
+def spectral_inversion_layer_filter(layer: dict[str, Any], duration: float, label: str) -> str:
+    carrier_hz = int(layer.get("carrier_hz") or 4100)
+    highpass_hz = int(layer.get("highpass_hz") or 180)
+    lowpass_hz = int(layer.get("lowpass_hz") or 7200)
+    volume_db = float(layer.get("volume_db") or -24.0)
+    delay_ms = max(0.0, float(layer.get("delay_ms") or 0.0))
+    pan = max(-0.95, min(0.95, float(layer.get("pan") or 0.0)))
+    left_gain = 1.0 - max(0.0, pan)
+    right_gain = 1.0 + min(0.0, pan)
+    source_label = f"{label}src"
+    oscillator_label = f"{label}osc"
+    return (
+        "[0:a:0]"
+        "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+        "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20,"
+        f"highpass=f={highpass_hz},lowpass=f={lowpass_hz},"
+        f"atrim=duration={duration:.5f},asetpts=PTS-STARTPTS[{source_label}];"
+        "sine="
+        f"frequency={carrier_hz}:sample_rate=48000:duration={duration:.5f},"
+        "pan=stereo|c0=c0|c1=c0,"
+        f"asetpts=PTS-STARTPTS[{oscillator_label}];"
+        f"[{source_label}][{oscillator_label}]"
+        "amultiply,"
+        "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+        "highpass=f=90,lowpass=f=14500,"
+        f"adelay={delay_ms:.3f}:all=1,"
+        f"volume={volume_db:.5f}dB,"
+        "pan=stereo|"
+        f"c0={left_gain:.5f}*c0|"
+        f"c1={right_gain:.5f}*c1,"
+        f"atrim=duration={duration:.5f},asetpts=PTS-STARTPTS[{label}]"
+    )
+
+
+def spectrogram_perturbation_layer_filter(
+    layer: dict[str, Any],
+    duration: float,
+    label: str,
+) -> str:
+    color = str(layer.get("color") or "pink")
+    amplitude = float(layer.get("amplitude") or 0.00025)
+    highpass_hz = int(layer.get("highpass_hz") or 300)
+    lowpass_hz = int(layer.get("lowpass_hz") or 4000)
+    tremolo_hz = max(0.1, float(layer.get("tremolo_hz") or 1.4))
+    tremolo_depth = max(0.0, min(0.95, float(layer.get("tremolo_depth") or 0.45)))
+    delay_ms = max(0.0, float(layer.get("delay_ms") or 0.0))
+    volume_db = float(layer.get("volume_db") or -20.0)
+    return (
+        "anoisesrc="
+        f"color={color}:amplitude={amplitude:.7f}:"
+        f"sample_rate=48000:duration={duration:.5f},"
+        f"highpass=f={highpass_hz},lowpass=f={lowpass_hz},"
+        f"tremolo=f={tremolo_hz:.6f}:d={tremolo_depth:.5f},"
+        f"adelay={delay_ms:.3f}:all=1,"
+        f"volume={volume_db:.5f}dB,"
+        f"atrim=duration={duration:.5f},asetpts=PTS-STARTPTS[{label}]"
+    )
+
+
+def chopped_audio_layer_filter(layer: dict[str, Any], duration: float, label: str) -> str:
+    start_seconds = max(0.0, float(layer.get("start_seconds") or 0.0))
+    segment_duration = max(0.025, float(layer.get("duration_seconds") or 0.08))
+    delay_ms = max(0.0, float(layer.get("delay_ms") or 0.0))
+    volume_db = float(layer.get("volume_db") or -22.0)
+    tempo = max(0.5, min(2.0, float(layer.get("tempo") or 1.0)))
+    pan = max(-0.95, min(0.95, float(layer.get("pan") or 0.0)))
+    left_gain = 1.0 - max(0.0, pan)
+    right_gain = 1.0 + min(0.0, pan)
+    reverse_filter = "areverse," if bool(layer.get("reverse")) else ""
+    return (
+        "[0:a:0]"
+        "aformat=sample_fmts=fltp:channel_layouts=stereo,"
+        "aresample=48000:async=1:first_pts=0:resampler=soxr:precision=20,"
+        f"atrim=start={start_seconds:.5f}:duration={segment_duration:.5f},"
+        "asetpts=PTS-STARTPTS,"
+        f"{reverse_filter}"
+        f"atempo={tempo:.8f},"
+        f"adelay={delay_ms:.3f}:all=1,"
+        f"volume={volume_db:.5f}dB,"
+        "pan=stereo|"
+        f"c0={left_gain:.5f}*c0|"
+        f"c1={right_gain:.5f}*c1,"
+        f"atrim=duration={duration:.5f},asetpts=PTS-STARTPTS[{label}]"
+    )
+
+
 def audio_filter_graph(
     plan: TransformPlan,
     duration_seconds: float,
@@ -1455,6 +1654,18 @@ def audio_filter_graph(
     for index, layer in enumerate(plan.audio_harmonic_layers):
         label = f"aharm{index}"
         parts.append(harmonic_audio_layer_filter(layer, duration, label))
+        mix_inputs.append(f"[{label}]")
+    for index, layer in enumerate(plan.audio_spectral_inversion_layers):
+        label = f"ainvert{index}"
+        parts.append(spectral_inversion_layer_filter(layer, duration, label))
+        mix_inputs.append(f"[{label}]")
+    for index, layer in enumerate(plan.audio_spectrogram_perturbation_layers):
+        label = f"aperturb{index}"
+        parts.append(spectrogram_perturbation_layer_filter(layer, duration, label))
+        mix_inputs.append(f"[{label}]")
+    for index, layer in enumerate(plan.audio_chop_layers):
+        label = f"achop{index}"
+        parts.append(chopped_audio_layer_filter(layer, duration, label))
         mix_inputs.append(f"[{label}]")
     if len(mix_inputs) == 1:
         parts.append("[a0]anull[aout]")

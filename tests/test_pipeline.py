@@ -277,13 +277,24 @@ def test_robustness_transform_level_six_uses_complex_audio_graph() -> None:
     graph = transform.audio_filter_graph(plan, duration_seconds=info.duration)
 
     assert plan.audio_harmonic_layers
+    assert plan.audio_spectral_inversion_layers
+    assert plan.audio_spectrogram_perturbation_layers
+    assert plan.audio_chop_layers
+    assert plan.audio_frequency_shift_enabled
     assert len(plan.audio_spectral_eq_bands) >= 6
     assert plan.audio_phase_invert_mix > 0
-    assert "parallel_multi_pitch_harmonic_layers" in {
-        operation["name"] for operation in plan.operations
-    }
+    operation_names = {operation["name"] for operation in plan.operations}
+    assert "parallel_multi_pitch_harmonic_layers" in operation_names
+    assert "low_volume_spectral_inversion_layers" in operation_names
+    assert "spectrogram_perturbation_noise_bands" in operation_names
+    assert "micro_chop_reordered_audio_snippets" in operation_names
     assert graph.count("equalizer=f=") >= 8
     assert "aphaseshift=" in graph
+    assert "afreqshift=" in graph
+    assert "amultiply" in graph
+    assert "ainvert0" in graph
+    assert "aperturb0" in graph
+    assert "achop0" in graph
     assert "aharm0" in graph
     assert "amix=inputs=" in graph
 
