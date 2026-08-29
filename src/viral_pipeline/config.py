@@ -158,6 +158,38 @@ TENNIS_EVENT_KEYWORDS = (
     "set,sets,game,games,crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
+FORMULA1_ACTIVITY_SEED_QUERIES = (
+    "viral formula 1 moments,formula 1 shorts,formula 1 challenge,"
+    "formula 1 compilation,viral formula 1 trend,formula 1 overtakes,"
+    "formula 1 pit stops,formula 1 last lap"
+)
+
+FORMULA1_COMPILATION_QUERIES = (
+    "unreal formula 1 overtakes shorts,epic formula 1 pit stops shorts,"
+    "unforgettable formula 1 moments shorts,insane formula 1 saves shorts,"
+    "best formula 1 starts shorts,impossible formula 1 wet weather shorts"
+)
+
+FORMULA1_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
+)
+
+FORMULA1_QUERY_TYPES = (
+    "formula 1 overtakes,formula 1 pit stops,formula 1 moments,formula 1 saves,"
+    "formula 1 starts,formula 1 last lap finishes,formula 1 wet weather drives,"
+    "formula 1 wheel to wheel battles,formula 1 fastest laps,formula 1 comebacks,"
+    "formula 1 race battles,formula 1 qualifying laps"
+)
+
+FORMULA1_EVENT_KEYWORDS = (
+    "formula 1,formula1,f1,grand prix,race,races,racing,driver,drivers,car,cars,"
+    "overtake,overtakes,passing,pit stop,pit stops,pitlane,lap,laps,last lap,"
+    "fastest lap,qualifying,grid,start,starts,wet weather,rain,drift,save,saves,"
+    "recovery,recoveries,wheel to wheel,comeback,finish,finishes,checkered flag,"
+    "podium,crowd,fans,crazy,unbelievable,incredible,impossible"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -220,6 +252,8 @@ class Settings(BaseSettings):
     basketball_query_types: str = BASKETBALL_QUERY_TYPES
     tennis_query_adjectives: str = TENNIS_QUERY_ADJECTIVES
     tennis_query_types: str = TENNIS_QUERY_TYPES
+    formula1_query_adjectives: str = FORMULA1_QUERY_ADJECTIVES
+    formula1_query_types: str = FORMULA1_QUERY_TYPES
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -309,6 +343,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = TENNIS_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = TENNIS_EVENT_KEYWORDS
+        elif self.content_domain == "formula1":
+            if not self.content_label:
+                self.content_label = "Formula 1 Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = FORMULA1_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = FORMULA1_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = FORMULA1_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"

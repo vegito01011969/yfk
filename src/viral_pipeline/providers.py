@@ -851,6 +851,144 @@ TENNIS_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+FORMULA1_CORE_TERMS = {
+    "car",
+    "cars",
+    "driver",
+    "drivers",
+    "f1",
+    "formula",
+    "grand",
+    "lap",
+    "laps",
+    "pit",
+    "pitlane",
+    "prix",
+    "qualifying",
+    "race",
+    "races",
+    "racing",
+    "start",
+    "starts",
+}
+
+FORMULA1_MOMENT_TERMS = {
+    "amazing",
+    "battle",
+    "battles",
+    "best",
+    "comeback",
+    "crazy",
+    "dramatic",
+    "epic",
+    "fastest",
+    "finish",
+    "finishes",
+    "impossible",
+    "incredible",
+    "insane",
+    "last",
+    "legendary",
+    "moment",
+    "moments",
+    "overtake",
+    "overtakes",
+    "save",
+    "saves",
+    "shocking",
+    "unbelievable",
+    "unforgettable",
+    "unreal",
+    "wet",
+}
+
+FORMULA1_EXCLUDED_TERMS = {
+    "assetto",
+    "cartoon",
+    "career",
+    "drive",
+    "edit",
+    "edits",
+    "gameplay",
+    "gaming",
+    "highlights",
+    "interview",
+    "iracing",
+    "lyrics",
+    "manager",
+    "minecraft",
+    "news",
+    "podcast",
+    "prediction",
+    "reaction",
+    "roblox",
+    "schedule",
+    "score",
+    "scores",
+    "simulator",
+    "song",
+    "talk",
+    "talks",
+    "trailer",
+}
+
+FORMULA1_THEME_QUERIES: dict[str, list[str]] = {
+    "overtakes": [
+        "unreal formula 1 overtakes shorts",
+        "insane formula 1 overtaking moves shorts",
+        "best formula 1 passes shorts",
+        "impossible formula 1 overtakes shorts",
+    ],
+    "pit_stops": [
+        "epic formula 1 pit stops shorts",
+        "fastest formula 1 pit stops shorts",
+        "insane formula 1 pitlane moments shorts",
+        "formula 1 pit stop saves shorts",
+    ],
+    "saves": [
+        "impossible formula 1 saves shorts",
+        "unreal formula 1 car recoveries shorts",
+        "insane formula 1 near crashes shorts",
+        "best formula 1 drift saves shorts",
+    ],
+    "starts": [
+        "best formula 1 starts shorts",
+        "insane formula 1 race starts shorts",
+        "formula 1 first lap overtakes shorts",
+        "unbelievable formula 1 launch starts shorts",
+    ],
+    "last_laps": [
+        "dramatic formula 1 last lap finishes shorts",
+        "formula 1 last lap battles shorts",
+        "unforgettable formula 1 race finishes shorts",
+        "formula 1 final lap overtakes shorts",
+    ],
+    "wet_weather": [
+        "impossible formula 1 wet weather drives shorts",
+        "unreal formula 1 rain racing shorts",
+        "best formula 1 wet track saves shorts",
+        "insane formula 1 rain overtakes shorts",
+    ],
+    "fastest_laps": [
+        "insane formula 1 fastest laps shorts",
+        "formula 1 qualifying lap shorts",
+        "best formula 1 pole laps shorts",
+        "unbelievable formula 1 onboard laps shorts",
+    ],
+    "comebacks": [
+        "legendary formula 1 comebacks shorts",
+        "formula 1 charge through the field shorts",
+        "epic formula 1 race battles shorts",
+        "unforgettable formula 1 moments shorts",
+    ],
+    "moments": [
+        "unforgettable formula 1 moments shorts",
+        "shocking formula 1 moments shorts",
+        "formula 1 moments that shocked everyone shorts",
+        "crazy formula 1 moments shorts",
+    ],
+}
+
 
 class YouTubeApiError(RuntimeError):
     """Raised when a YouTube API call fails without exposing credentials."""
@@ -1080,6 +1218,15 @@ def _ensure_tennis_query(query: str) -> str:
     return f"tennis {query}"
 
 
+def _ensure_formula1_query(query: str) -> str:
+    lowered = query.lower()
+    if "formula 1" in lowered:
+        return query
+    if "formula1" in lowered:
+        return re.sub(r"formula1", "formula 1", query, flags=re.IGNORECASE)
+    return f"formula 1 {query}"
+
+
 def _domain_search_query(query: str, settings: Settings | None) -> str:
     if settings and settings.content_domain == "football":
         return _ensure_football_query(query)
@@ -1089,6 +1236,8 @@ def _domain_search_query(query: str, settings: Settings | None) -> str:
         return _ensure_basketball_query(query)
     if settings and settings.content_domain == "tennis":
         return _ensure_tennis_query(query)
+    if settings and settings.content_domain == "formula1":
+        return _ensure_formula1_query(query)
     return query
 
 
@@ -1200,6 +1349,32 @@ def _tennis_theme_search_queries(query: str) -> list[str]:
     return [query, *TENNIS_THEME_QUERIES[theme]]
 
 
+def _formula1_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("overtake", "overtakes", "overtaking", "pass", "passes")):
+        return "overtakes"
+    if any(term in lowered for term in ("pit stop", "pit stops", "pitlane")):
+        return "pit_stops"
+    if any(term in lowered for term in ("save", "saves", "recovery", "near crash", "drift")):
+        return "saves"
+    if any(term in lowered for term in ("start", "starts", "first lap", "launch")):
+        return "starts"
+    if any(term in lowered for term in ("last lap", "final lap", "finish", "finishes")):
+        return "last_laps"
+    if any(term in lowered for term in ("wet weather", "rain", "wet track")):
+        return "wet_weather"
+    if any(term in lowered for term in ("fastest lap", "qualifying", "pole", "onboard")):
+        return "fastest_laps"
+    if any(term in lowered for term in ("comeback", "comebacks", "charge", "battle", "battles")):
+        return "comebacks"
+    return "moments"
+
+
+def _formula1_theme_search_queries(query: str) -> list[str]:
+    theme = _formula1_theme(query)
+    return [query, *FORMULA1_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -1243,6 +1418,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _tennis_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "formula1":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _formula1_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -1525,6 +1705,50 @@ def _tennis_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _formula1_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & FORMULA1_CORE_TERMS
+    moment_matches = tokens & FORMULA1_MOMENT_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & FORMULA1_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & FORMULA1_CORE_TERMS
+    title_moment_matches = title_tokens & FORMULA1_MOMENT_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.38, 0.2 + len(core_matches) * 0.035)
+    if moment_matches:
+        score += min(0.34, 0.14 + len(moment_matches) * 0.04)
+    if query_matches:
+        score += min(0.18, len(query_matches) * 0.035)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.3
+    if not moment_matches:
+        score -= 0.12
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.32
+    if not title_moment_matches:
+        score -= 0.08
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -1540,11 +1764,15 @@ def _domain_relevance_score(
         return _basketball_relevance_score(video, query)
     if settings and settings.content_domain == "tennis":
         return _tennis_relevance_score(video, query)
+    if settings and settings.content_domain == "formula1":
+        return _formula1_relevance_score(video, query)
     return 0.75
 
 
 def _domain_relevance_threshold(settings: Settings | None) -> float | None:
-    if settings and settings.content_domain in {"football", "cricket", "basketball", "tennis"}:
+    if settings and settings.content_domain in {
+        "football", "cricket", "basketball", "tennis", "formula1"
+    }:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
         return 0.45
@@ -1679,7 +1907,9 @@ class CompilationQueryProvider:
             for query in queries
             for language in languages
         ]
-        randomized_query_domains = {"kids_funny", "football", "cricket", "basketball", "tennis"}
+        randomized_query_domains = {
+            "kids_funny", "football", "cricket", "basketball", "tennis", "formula1"
+        }
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
         candidates = sorted(
@@ -1762,6 +1992,16 @@ def _tennis_query_combinations(settings: Settings) -> list[str]:
     ]
 
 
+def _formula1_query_combinations(settings: Settings) -> list[str]:
+    adjectives = _settings_csv(settings.formula1_query_adjectives)
+    types = _settings_csv(settings.formula1_query_types)
+    return [
+        _ensure_shorts_query(_ensure_formula1_query(f"{adjective} {query_type}"))
+        for query_type in types
+        for adjective in adjectives
+    ]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
@@ -1777,6 +2017,10 @@ def _compilation_queries(settings: Settings) -> list[str]:
         queries = [*generated, *configured]
     elif settings.content_domain == "tennis":
         generated = _tennis_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "formula1":
+        generated = _formula1_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -1974,7 +2218,8 @@ class YouTubeDataProvider:
         query_pool_size = (
             min(50, pool_size)
             if self.settings
-            and self.settings.content_domain in {"football", "cricket", "basketball", "tennis"}
+            and self.settings.content_domain
+            in {"football", "cricket", "basketball", "tennis", "formula1"}
             else pool_size
         )
         videos: list[YouTubeVideo] = []
@@ -1982,7 +2227,8 @@ class YouTubeDataProvider:
         search_queries = _shorts_search_queries(trend.title, language, self.settings)
         focused_domain = (
             self.settings is not None
-            and self.settings.content_domain in {"football", "cricket", "basketball", "tennis"}
+            and self.settings.content_domain
+            in {"football", "cricket", "basketball", "tennis", "formula1"}
         )
         if focused_domain:
             query_count = max(1, self.settings.youtube_focused_search_query_count)
@@ -2043,7 +2289,7 @@ class YouTubeDataProvider:
                 if (
                     self.settings
                     and self.settings.content_domain
-                    not in {"football", "cricket", "basketball", "tennis"}
+                    not in {"football", "cricket", "basketball", "tennis", "formula1"}
                     and len(videos) >= pool_size
                 ):
                     break
@@ -2052,7 +2298,7 @@ class YouTubeDataProvider:
             if (
                 self.settings
                 and self.settings.content_domain
-                not in {"football", "cricket", "basketball", "tennis"}
+                not in {"football", "cricket", "basketball", "tennis", "formula1"}
                 and len(videos) >= pool_size
             ):
                 break
@@ -3087,7 +3333,9 @@ def build_providers(
     trend_provider: TrendProvider = (
         CompilationQueryProvider(settings)
         if settings.content_domain
-        in {"kids_funny", "football", "cricket", "basketball", "tennis", "compilation"}
+        in {
+            "kids_funny", "football", "cricket", "basketball", "tennis", "formula1", "compilation"
+        }
         else YouTubeTrendProvider(settings, youtube_client)
         if youtube_client
         else LocalTrendProvider()

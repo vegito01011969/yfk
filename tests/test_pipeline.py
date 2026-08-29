@@ -113,6 +113,7 @@ def test_scheduled_workflows_do_not_hard_fail_on_colab_session_listing() -> None
         "cricket-pipeline.yml",
         "basketball-pipeline.yml",
         "tennis-pipeline.yml",
+        "formula1-pipeline.yml",
     ):
         workflow = (workflows_dir / workflow_name).read_text(encoding="utf-8")
 
@@ -1294,7 +1295,7 @@ def test_validate_expected_upload_channel_rejects_wrong_channel(tmp_path: Path) 
 
 
 def test_niche_uploads_require_expected_channel_id(tmp_path: Path) -> None:
-    for domain in ("football", "cricket", "basketball", "tennis"):
+    for domain in ("football", "cricket", "basketball", "tennis", "formula1"):
         settings = make_settings(tmp_path)
         settings.content_domain = domain
         settings.enable_youtube_upload = True
