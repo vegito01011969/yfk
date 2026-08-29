@@ -578,6 +578,140 @@ CRICKET_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+BASKETBALL_CORE_TERMS = {
+    "alley",
+    "arena",
+    "assist",
+    "ball",
+    "basketball",
+    "block",
+    "blocks",
+    "buzzer",
+    "clutch",
+    "crossover",
+    "crossovers",
+    "defender",
+    "dunk",
+    "dunks",
+    "fast",
+    "hoop",
+    "hoops",
+    "layup",
+    "nba",
+    "pass",
+    "passes",
+    "pointer",
+    "pointers",
+    "shot",
+    "shots",
+    "slam",
+    "steal",
+    "steals",
+    "three",
+}
+
+BASKETBALL_MOMENT_TERMS = {
+    "amazing",
+    "best",
+    "buzzer",
+    "clutch",
+    "comeback",
+    "crazy",
+    "dramatic",
+    "epic",
+    "game",
+    "impossible",
+    "incredible",
+    "insane",
+    "last",
+    "legendary",
+    "moment",
+    "moments",
+    "shocking",
+    "unbelievable",
+    "unforgettable",
+    "unreal",
+    "unexpected",
+    "viral",
+    "winner",
+}
+
+BASKETBALL_EXCLUDED_TERMS = {
+    "2k",
+    "cartoon",
+    "edit",
+    "edits",
+    "gameplay",
+    "gaming",
+    "highlights",
+    "interview",
+    "jersey",
+    "lyrics",
+    "minecraft",
+    "news",
+    "podcast",
+    "reaction",
+    "roblox",
+    "schedule",
+    "score",
+    "scores",
+    "song",
+    "talk",
+    "talks",
+    "trailer",
+}
+
+BASKETBALL_THEME_QUERIES: dict[str, list[str]] = {
+    "dunks": [
+        "unreal basketball dunks shorts",
+        "insane basketball slam dunks shorts",
+        "best basketball poster dunks shorts",
+        "impossible basketball dunks shorts",
+    ],
+    "blocks": [
+        "epic basketball blocks shorts",
+        "insane basketball chase down blocks shorts",
+        "best basketball defensive blocks shorts",
+        "impossible basketball block shorts",
+    ],
+    "crossovers": [
+        "insane basketball crossovers shorts",
+        "basketball ankle breakers shorts",
+        "best basketball handles shorts",
+        "unbelievable basketball dribbling shorts",
+    ],
+    "assists": [
+        "unreal basketball assists shorts",
+        "insane basketball passes shorts",
+        "best basketball no look passes shorts",
+        "basketball alley oop assists shorts",
+    ],
+    "buzzer_beaters": [
+        "epic basketball buzzer beaters shorts",
+        "basketball game winners shorts",
+        "impossible basketball clutch shots shorts",
+        "last second basketball shots shorts",
+    ],
+    "steals": [
+        "insane basketball steals shorts",
+        "best basketball defensive steals shorts",
+        "basketball fast break steals shorts",
+        "unbelievable basketball steals shorts",
+    ],
+    "three_pointers": [
+        "best basketball three pointers shorts",
+        "insane basketball three point shots shorts",
+        "impossible basketball long range shots shorts",
+        "basketball clutch threes shorts",
+    ],
+    "moments": [
+        "unforgettable basketball moments shorts",
+        "shocking basketball moments shorts",
+        "basketball moments that shocked everyone shorts",
+        "crazy basketball moments shorts",
+    ],
+}
+
 
 class YouTubeApiError(RuntimeError):
     """Raised when a YouTube API call fails without exposing credentials."""
@@ -795,11 +929,19 @@ def _ensure_cricket_query(query: str) -> str:
     return f"cricket {query}"
 
 
+def _ensure_basketball_query(query: str) -> str:
+    if "basketball" in query.lower():
+        return query
+    return f"basketball {query}"
+
+
 def _domain_search_query(query: str, settings: Settings | None) -> str:
     if settings and settings.content_domain == "football":
         return _ensure_football_query(query)
     if settings and settings.content_domain == "cricket":
         return _ensure_cricket_query(query)
+    if settings and settings.content_domain == "basketball":
+        return _ensure_basketball_query(query)
     return query
 
 
@@ -861,6 +1003,30 @@ def _cricket_theme_search_queries(query: str) -> list[str]:
     return [query, *CRICKET_THEME_QUERIES[theme]]
 
 
+def _basketball_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("dunk", "dunks", "slam", "slams")):
+        return "dunks"
+    if any(term in lowered for term in ("block", "blocks", "chase down")):
+        return "blocks"
+    if any(term in lowered for term in ("crossover", "crossovers", "ankle", "dribbl")):
+        return "crossovers"
+    if any(term in lowered for term in ("assist", "assists", "pass", "passes", "alley oop")):
+        return "assists"
+    if any(term in lowered for term in ("buzzer", "game winner", "clutch", "last second")):
+        return "buzzer_beaters"
+    if any(term in lowered for term in ("steal", "steals", "fast break")):
+        return "steals"
+    if any(term in lowered for term in ("three", "3 point", "three point")):
+        return "three_pointers"
+    return "moments"
+
+
+def _basketball_theme_search_queries(query: str) -> list[str]:
+    theme = _basketball_theme(query)
+    return [query, *BASKETBALL_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -894,6 +1060,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _cricket_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "basketball":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _basketball_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -1088,6 +1259,50 @@ def _cricket_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _basketball_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & BASKETBALL_CORE_TERMS
+    moment_matches = tokens & BASKETBALL_MOMENT_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & BASKETBALL_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & BASKETBALL_CORE_TERMS
+    title_moment_matches = title_tokens & BASKETBALL_MOMENT_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.38, 0.2 + len(core_matches) * 0.035)
+    if moment_matches:
+        score += min(0.34, 0.14 + len(moment_matches) * 0.04)
+    if query_matches:
+        score += min(0.18, len(query_matches) * 0.035)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.3
+    if not moment_matches:
+        score -= 0.12
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.32
+    if not title_moment_matches:
+        score -= 0.08
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -1099,11 +1314,13 @@ def _domain_relevance_score(
         return _football_relevance_score(video, query)
     if settings and settings.content_domain == "cricket":
         return _cricket_relevance_score(video, query)
+    if settings and settings.content_domain == "basketball":
+        return _basketball_relevance_score(video, query)
     return 0.75
 
 
 def _domain_relevance_threshold(settings: Settings | None) -> float | None:
-    if settings and settings.content_domain in {"football", "cricket"}:
+    if settings and settings.content_domain in {"football", "cricket", "basketball"}:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
         return 0.45
@@ -1238,7 +1455,7 @@ class CompilationQueryProvider:
             for query in queries
             for language in languages
         ]
-        randomized_query_domains = {"kids_funny", "football", "cricket"}
+        randomized_query_domains = {"kids_funny", "football", "cricket", "basketball"}
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
         candidates = sorted(
@@ -1301,6 +1518,16 @@ def _cricket_query_combinations(settings: Settings) -> list[str]:
     ]
 
 
+def _basketball_query_combinations(settings: Settings) -> list[str]:
+    adjectives = _settings_csv(settings.basketball_query_adjectives)
+    types = _settings_csv(settings.basketball_query_types)
+    return [
+        _ensure_shorts_query(_ensure_basketball_query(f"{adjective} {query_type}"))
+        for query_type in types
+        for adjective in adjectives
+    ]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
@@ -1308,6 +1535,10 @@ def _compilation_queries(settings: Settings) -> list[str]:
         queries = [*generated, *configured]
     elif settings.content_domain == "cricket":
         generated = _cricket_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "basketball":
+        generated = _basketball_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -1504,7 +1735,8 @@ class YouTubeDataProvider:
         )
         query_pool_size = (
             min(50, pool_size)
-            if self.settings and self.settings.content_domain in {"football", "cricket"}
+            if self.settings
+            and self.settings.content_domain in {"football", "cricket", "basketball"}
             else pool_size
         )
         videos: list[YouTubeVideo] = []
@@ -1512,7 +1744,7 @@ class YouTubeDataProvider:
         search_queries = _shorts_search_queries(trend.title, language, self.settings)
         focused_domain = (
             self.settings is not None
-            and self.settings.content_domain in {"football", "cricket"}
+            and self.settings.content_domain in {"football", "cricket", "basketball"}
         )
         if focused_domain:
             query_count = max(1, self.settings.youtube_focused_search_query_count)
@@ -1572,7 +1804,7 @@ class YouTubeDataProvider:
                     videos.append(video)
                 if (
                     self.settings
-                    and self.settings.content_domain not in {"football", "cricket"}
+                    and self.settings.content_domain not in {"football", "cricket", "basketball"}
                     and len(videos) >= pool_size
                 ):
                     break
@@ -1580,7 +1812,7 @@ class YouTubeDataProvider:
                 break
             if (
                 self.settings
-                and self.settings.content_domain not in {"football", "cricket"}
+                and self.settings.content_domain not in {"football", "cricket", "basketball"}
                 and len(videos) >= pool_size
             ):
                 break
@@ -2614,7 +2846,8 @@ def build_providers(
     )
     trend_provider: TrendProvider = (
         CompilationQueryProvider(settings)
-        if settings.content_domain in {"kids_funny", "football", "cricket", "compilation"}
+        if settings.content_domain
+        in {"kids_funny", "football", "cricket", "basketball", "compilation"}
         else YouTubeTrendProvider(settings, youtube_client)
         if youtube_client
         else LocalTrendProvider()

@@ -97,6 +97,38 @@ CRICKET_EVENT_KEYWORDS = (
     "fans,crazy,unbelievable,incredible,impossible"
 )
 
+BASKETBALL_ACTIVITY_SEED_QUERIES = (
+    "viral basketball moments,basketball shorts,basketball challenge,"
+    "basketball compilation,viral basketball trend,basketball trick shots,"
+    "basketball dunks,basketball blocks"
+)
+
+BASKETBALL_COMPILATION_QUERIES = (
+    "unreal basketball dunks shorts,epic basketball blocks shorts,"
+    "unforgettable basketball moments shorts,insane basketball crossovers shorts,"
+    "best basketball buzzer beaters shorts,impossible basketball passes shorts"
+)
+
+BASKETBALL_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
+)
+
+BASKETBALL_QUERY_TYPES = (
+    "basketball dunks,basketball blocks,basketball moments,basketball crossovers,"
+    "basketball assists,basketball buzzer beaters,basketball game winners,"
+    "basketball steals,basketball ankle breakers,basketball three pointers,"
+    "basketball clutch shots,basketball fast breaks,basketball alley oops"
+)
+
+BASKETBALL_EVENT_KEYWORDS = (
+    "basketball,nba,wnba,hoops,hoop,dunk,dunks,slam,slams,block,blocks,"
+    "crossover,crossovers,assist,assists,pass,passes,buzzer beater,game winner,"
+    "three pointer,three pointers,three point,steal,steals,ankle breaker,"
+    "alley oop,fast break,layup,layups,shot,shots,clutch,comeback,"
+    "overtime,quarter,arena,crowd,fans,crazy,unbelievable,incredible,impossible"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -155,6 +187,8 @@ class Settings(BaseSettings):
     football_query_types: str = FOOTBALL_QUERY_TYPES
     cricket_query_adjectives: str = CRICKET_QUERY_ADJECTIVES
     cricket_query_types: str = CRICKET_QUERY_TYPES
+    basketball_query_adjectives: str = BASKETBALL_QUERY_ADJECTIVES
+    basketball_query_types: str = BASKETBALL_QUERY_TYPES
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -222,6 +256,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = CRICKET_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = CRICKET_EVENT_KEYWORDS
+        elif self.content_domain == "basketball":
+            if not self.content_label:
+                self.content_label = "Basketball Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = BASKETBALL_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = BASKETBALL_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = BASKETBALL_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"

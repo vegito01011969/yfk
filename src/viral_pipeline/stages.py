@@ -1511,7 +1511,7 @@ class UploadYouTubeStage(PipelineStage):
 
 
 def _require_expected_upload_channel_for_domain(settings: Settings) -> None:
-    guarded_domains = {"football", "cricket"}
+    guarded_domains = {"football", "cricket", "basketball"}
     if (
         settings.content_domain in guarded_domains
         and not settings.youtube_upload_expected_channel_id

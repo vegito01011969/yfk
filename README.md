@@ -7,6 +7,7 @@ The current production niches are:
 - `kids_funny`: funny kids/toddler/family moments for FlawedGiggles.
 - `football`: football/soccer moments for a separate football channel.
 - `cricket`: cricket moments for a separate cricket channel.
+- `basketball`: basketball moments for a separate basketball channel.
 
 The code is structured as a production foundation rather than a one-off script. Each stage has a narrow interface and can be replaced independently as better providers, ranking models, or renderers are added.
 
@@ -19,13 +20,13 @@ The code is structured as a production foundation rather than a one-off script. 
 - YouTube Data API search when `YOUTUBE_API_KEY` is configured.
 - Deterministic local fallback providers for development and CI.
 - Optional real adapters for YouTube Data API, `yt-dlp`, `ffmpeg`, Groq/OpenAI-compatible metadata generation, and OpenAI voice generation.
-- Supports domain-specific search buckets. The kids pipeline randomly chooses among least-used toddler/family funny synonym buckets; the football and cricket pipelines build one focused theme per run as `<adjective> <type> shorts`, such as `unreal football saves shorts`, `epic football penalties shorts`, `unreal cricket catches shorts`, or `best cricket wickets shorts`.
+- Supports domain-specific search buckets. The kids pipeline randomly chooses among least-used toddler/family funny synonym buckets; the sports pipelines build one focused theme per run as `<adjective> <type> shorts`, such as `unreal football saves shorts`, `epic cricket catches shorts`, or `best basketball dunks shorts`.
 - Downloads top Shorts or very short videos before clip extraction.
 - Treats each short video as a candidate moment by default, then groups and ranks moments before final assembly.
 - Produces a clip-only compilation by default: no title card, no numbering overlays, and no narration.
 - Runs the final compilation through the local provenance robustness transform by default, then uses that transformed file as the publish-ready output.
 - Tracks previously downloaded source video IDs in a small source-history file to avoid repeat runs reusing the same Shorts.
-- Locks each run to one source language bucket. The kids workflow rotates English/Hindi; the football and cricket workflows use English.
+- Locks each run to one source language bucket. The kids workflow rotates English/Hindi; the sports workflows use English.
 - Publishing package manifest with metadata, selected clips, and final render path.
 
 ## Quick Start
@@ -68,16 +69,18 @@ viral-pipeline run
 
 Key environment variables:
 
-- `CONTENT_DOMAIN`: pipeline domain. Supported production values: `kids_funny`, `football`, `cricket`.
+- `CONTENT_DOMAIN`: pipeline domain. Supported production values: `kids_funny`, `football`, `cricket`, `basketball`.
 - `CONTENT_LABEL`: label used for publish titles. Defaults are selected from `CONTENT_DOMAIN`.
 - `SOURCE_LANGUAGE_MODE`: language selection strategy. Default: `cycle`.
 - `SOURCE_LANGUAGES`: comma-separated source languages to rotate through. Defaults are selected from `CONTENT_DOMAIN`.
-- `SOURCE_HISTORY_PATH`: JSON source catalog used to avoid repeated YouTube source videos across runs. The kids workflow uses `data/source_video_history.json`; the football workflow uses `data/football_source_video_history.json`; the cricket workflow uses `data/cricket_source_video_history.json`.
-- `COMPILATION_QUERIES`: comma-separated searches. Defaults are selected from `CONTENT_DOMAIN`. In `CONTENT_DOMAIN=football` or `CONTENT_DOMAIN=cricket`, each run chooses one focused theme and expands only to related query variants; the pipeline defensively adds the domain keyword to any configured search query that omits it.
+- `SOURCE_HISTORY_PATH`: JSON source catalog used to avoid repeated YouTube source videos across runs. Each workflow has its own domain-specific history file.
+- `COMPILATION_QUERIES`: comma-separated searches. Defaults are selected from `CONTENT_DOMAIN`. In each sports domain, one focused theme is selected and expanded only to related query variants; the pipeline defensively adds the sport keyword to any configured search query that omits it.
 - `FOOTBALL_QUERY_ADJECTIVES`: comma-separated adjective pool for generated football themes. Default includes `unreal`, `epic`, `unforgettable`, `insane`, `best`, `impossible`, and similar terms.
 - `FOOTBALL_QUERY_TYPES`: comma-separated football type pool for generated football themes. Default includes `football saves`, `football penalties`, `football passes`, `football goals`, `football free kicks`, and similar types.
 - `CRICKET_QUERY_ADJECTIVES`: comma-separated adjective pool for generated cricket themes. Default includes `unreal`, `epic`, `unforgettable`, `insane`, `best`, `impossible`, and similar terms.
 - `CRICKET_QUERY_TYPES`: comma-separated cricket type pool for generated cricket themes. Default includes `cricket catches`, `cricket sixes`, `cricket wickets`, `cricket bowling`, `cricket run outs`, and similar types.
+- `BASKETBALL_QUERY_ADJECTIVES`: comma-separated adjective pool for generated basketball themes.
+- `BASKETBALL_QUERY_TYPES`: comma-separated basketball type pool for generated basketball themes. Default includes `basketball dunks`, `basketball blocks`, `basketball crossovers`, `basketball assists`, and similar types.
 - `EVENT_KEYWORDS`: comma-separated moment terms used for grouping/ranking.
 - `SOURCE_VIDEO_MODE`: source-video strategy. Default: `shorts`.
 - `MAX_SOURCE_VIDEO_SECONDS`: maximum source duration kept in shorts mode. Default: `30`.
@@ -145,12 +148,13 @@ Short-video content can involve copyright, consent, privacy, broadcast-rights, l
 - `.github/workflows/pipeline.yml`: kids/funny pipeline for FlawedGiggles.
 - `.github/workflows/football-pipeline.yml`: football pipeline for the football channel.
 - `.github/workflows/cricket-pipeline.yml`: cricket pipeline for the cricket channel.
+- `.github/workflows/basketball-pipeline.yml`: basketball pipeline for the basketball channel.
 
 The workflows use separate source-history cache keys, OAuth token secrets, and concurrency groups so the pipelines do not reuse each other's videos or upload credentials.
 
 ## Niche GitHub Actions Secrets
 
-The football and cricket workflows use the same shared infrastructure secrets as the kids pipeline where appropriate:
+The sports workflows use the same shared infrastructure secrets as the kids pipeline where appropriate:
 
 - `YOUTUBE_API_KEY`
 - `GROQCLOUD_API_KEY`
@@ -168,6 +172,12 @@ Use separate upload credentials for the cricket channel:
 - `CRICKET_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON`
 - `CRICKET_YOUTUBE_OAUTH_TOKEN_JSON`
 - `CRICKET_YOUTUBE_CHANNEL_ID`
+
+Use separate upload credentials for the basketball channel:
+
+- `BASKETBALL_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON`
+- `BASKETBALL_YOUTUBE_OAUTH_TOKEN_JSON`
+- `BASKETBALL_YOUTUBE_CHANNEL_ID`
 
 For local football-channel auth, use a separate token path and expected channel guard:
 
@@ -189,3 +199,14 @@ viral-pipeline auth-youtube-upload
 ```
 
 Do not reuse an OAuth token from another channel. In `CONTENT_DOMAIN=cricket`, uploads fail unless `YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID` is configured and matches the authenticated channel.
+
+For local basketball-channel auth, use a separate token path and expected channel guard:
+
+```bash
+export CONTENT_DOMAIN="basketball"
+export YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID="UC..."
+export YOUTUBE_OAUTH_TOKEN_PATH="data/basketball_youtube_oauth_token.json"
+viral-pipeline auth-youtube-upload
+```
+
+Do not reuse an OAuth token from another channel. In `CONTENT_DOMAIN=basketball`, uploads fail unless `YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID` is configured and matches the authenticated channel.

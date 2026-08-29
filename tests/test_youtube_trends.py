@@ -9,6 +9,7 @@ from viral_pipeline.providers import (
     YouTubeApiError,
     YouTubeDataProvider,
     YouTubeTrendProvider,
+    _domain_relevance_score,
     _shorts_search_queries,
 )
 from viral_pipeline.source_history import SourceHistory
@@ -516,6 +517,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
     kids = Settings(_env_file=None, content_domain="kids_funny")
     football = Settings(_env_file=None, content_domain="football")
     cricket = Settings(_env_file=None, content_domain="cricket")
+    basketball = Settings(_env_file=None, content_domain="basketball")
 
     assert kids.content_label == "Funny Kid Clips"
     assert kids.source_languages == "en,hi"
@@ -530,6 +532,11 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert cricket.source_languages == "en"
     assert cricket.cricket_query_adjectives.split(",")[0] == "unreal"
     assert cricket.cricket_query_types.split(",")[0] == "cricket catches"
+
+    assert basketball.content_label == "Basketball Moments"
+    assert basketball.source_languages == "en"
+    assert basketball.basketball_query_adjectives.split(",")[0] == "unreal"
+    assert basketball.basketball_query_types.split(",")[0] == "basketball dunks"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -653,6 +660,44 @@ def test_cricket_short_queries_stay_inside_selected_theme() -> None:
         for query in queries
     )
     assert not any("viral cricket moments" in query.lower() for query in queries)
+
+
+def test_basketball_short_queries_stay_inside_selected_theme() -> None:
+    settings = Settings(_env_file=None, content_domain="basketball")
+
+    queries = _shorts_search_queries("unreal basketball dunks shorts", "en", settings)
+
+    assert queries
+    assert all("basketball" in query.lower() for query in queries)
+    assert all(
+        any(term in query.lower() for term in ("dunk", "slam", "poster"))
+        for query in queries
+    )
+    assert not any("viral basketball moments" in query.lower() for query in queries)
+
+
+def test_basketball_relevance_rejects_gameplay() -> None:
+    settings = Settings(_env_file=None, content_domain="basketball")
+    real_moment = YouTubeVideo(
+        id="dunk",
+        trend_id="trend-1",
+        title="Insane basketball poster dunk #shorts",
+        url="https://www.youtube.com/watch?v=dunk",
+        channel_title="Basketball Moments",
+        view_count=1_000_000,
+        like_count=100_000,
+        metadata={"tags": ["basketball", "dunk", "insane", "nba"]},
+    )
+    gameplay = real_moment.model_copy(
+        update={
+            "id": "gameplay",
+            "title": "NBA 2K basketball gameplay #shorts",
+            "metadata": {"tags": ["basketball", "nba 2k", "gameplay"]},
+        }
+    )
+
+    assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
+    assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
 
 
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:
