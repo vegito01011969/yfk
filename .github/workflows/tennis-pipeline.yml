@@ -1,0 +1,208 @@
+name: scheduled-tennis-shorts-pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2,8,14,20 * * *"
+
+concurrency:
+  group: tennis-youtube-shorts-pipeline
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+
+    env:
+      CI: "true"
+      CONTENT_DOMAIN: tennis
+      CONTENT_LABEL: Tennis Moments
+      SOURCE_LANGUAGE_MODE: cycle
+      SOURCE_LANGUAGES: en
+      SOURCE_HISTORY_PATH: data/tennis_source_video_history.json
+      USE_REAL_MEDIA: "true"
+      DOWNLOAD_BACKEND: colab
+      MAX_VIDEOS_PER_TREND: "40"
+      MAX_DOWNLOAD_VIDEOS: "5"
+      MAX_DOWNLOAD_ATTEMPTS: "10"
+      MAX_DOWNLOAD_STAGE_SECONDS: "900"
+      MIN_DOWNLOAD_VIDEOS_FOR_UPLOAD: "2"
+      FAIL_ON_NO_SOURCE_DOWNLOADS: "false"
+      YOUTUBE_FOCUSED_SEARCH_QUERY_COUNT: "4"
+      PIPELINE_UPLOAD_ATTEMPTS: "3"
+      PIPELINE_ATTEMPT_TIMEOUT_SECONDS: "900"
+      PIPELINE_REQUIRE_UPLOAD: "true"
+      ENABLE_YOUTUBE_UPLOAD: "true"
+      YOUTUBE_UPLOAD_PRIVACY_STATUS: "public"
+      YOUTUBE_UPLOAD_NOTIFY_SUBSCRIBERS: "false"
+      YOUTUBE_UPLOAD_CATEGORY_ID: "22"
+      RENDER_COMMAND_TIMEOUT_SECONDS: "300"
+      PROVENANCE_TRANSFORM_TIMEOUT_SECONDS: "300"
+      PROVENANCE_TRANSFORM_FAIL_OPEN: "true"
+      PROVENANCE_TRANSFORM_LEVEL: "2"
+      YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID: ${{ secrets.TENNIS_YOUTUBE_CHANNEL_ID }}
+      YOUTUBE_VIDEO_MADE_FOR_KIDS: "false"
+      YOUTUBE_VIDEO_SELF_DECLARED_MADE_FOR_KIDS: "false"
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      GROQCLOUD_API_KEY: ${{ secrets.GROQCLOUD_API_KEY }}
+      YOUTUBE_OAUTH_CLIENT_SECRETS: secrets/youtube_client_secret.json
+      YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
+      YT_DLP_COOKIES_PATH: secrets/youtube_cookies.txt
+      YT_DLP_JS_RUNTIMES: node
+      YT_DLP_EXTRACTOR_ARGS: "youtube:player_client=tv_downgraded,tv_simply,web_embedded,android_vr,mweb,web_safari"
+      YT_DLP_VERBOSE: "false"
+      YT_DLP_DOWNLOAD_TIMEOUT_SECONDS: "90"
+      COLAB_CLI_AUTH: adc
+      GOOGLE_APPLICATION_CREDENTIALS: secrets/colab_adc.json
+      COLAB_UPLOAD_YOUTUBE_COOKIES: "true"
+      COLAB_COMMAND_TIMEOUT_SECONDS: "1050"
+      COLAB_ENABLE_BROWSER_PO_TOKEN: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js for yt-dlp JavaScript challenges
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up static ffmpeg
+        timeout-minutes: 8
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+            python -m pip install "static-ffmpeg==2.13"
+            python scripts/setup_static_ffmpeg.py | tee /tmp/static_ffmpeg_setup.log
+            FFMPEG_BIN_DIR="$(grep '^bin_dir=' /tmp/static_ffmpeg_setup.log | cut -d= -f2-)"
+            export PATH="$FFMPEG_BIN_DIR:$PATH"
+          fi
+          command -v ffmpeg
+          command -v ffprobe
+          ffmpeg -version | head -n 1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install -e ".[media,ai]"
+          python -m pip install "google-colab-cli"
+          python -m pip install "jupyter-kernel-client @ git+https://github.com/googlecolab/jupyter-kernel-client.git@f18e982c3265df5e923aa9def101ab3fd737e139"
+          python -m pip show yt-dlp yt-dlp-ejs google-colab-cli
+          colab version
+
+      - name: Prepare runtime directories
+        run: mkdir -p data workdir/runs secrets
+
+      - name: Restore tennis pipeline state
+        uses: actions/cache/restore@v4
+        with:
+          path: data/tennis_source_video_history.json
+          key: tennis-pipeline-state-v1-${{ github.run_id }}
+          restore-keys: |
+            tennis-pipeline-state-v1-
+
+      - name: Materialize tennis YouTube auth files
+        env:
+          YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.TENNIS_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
+          YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.TENNIS_YOUTUBE_OAUTH_TOKEN_JSON }}
+          YOUTUBE_COOKIES_TXT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
+          COLAB_ADC_JSON: ${{ secrets.COLAB_ADC_JSON }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          secrets_dir = Path("secrets")
+          secrets_dir.mkdir(parents=True, exist_ok=True)
+          required = {
+              "YOUTUBE_OAUTH_CLIENT_SECRETS_JSON": secrets_dir / "youtube_client_secret.json",
+              "YOUTUBE_OAUTH_TOKEN_JSON": secrets_dir / "youtube_oauth_token.json",
+              "YOUTUBE_COOKIES_TXT": secrets_dir / "youtube_cookies.txt",
+          }
+          missing = [name for name in required if not os.environ.get(name)]
+          if not os.environ.get("YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID"):
+              missing.append("TENNIS_YOUTUBE_CHANNEL_ID")
+          if (
+              os.environ.get("DOWNLOAD_BACKEND") == "colab"
+              and os.environ.get("COLAB_CLI_AUTH") == "adc"
+              and not os.environ.get("COLAB_ADC_JSON")
+          ):
+              missing.append("COLAB_ADC_JSON")
+          if missing:
+              raise SystemExit(f"Missing required GitHub secrets: {', '.join(missing)}")
+          for env_name, path in required.items():
+              path.write_text(os.environ[env_name], encoding="utf-8")
+          colab_adc = os.environ.get("COLAB_ADC_JSON")
+          if colab_adc:
+              (secrets_dir / "colab_adc.json").write_text(colab_adc, encoding="utf-8")
+          PY
+
+      - name: Validate YouTube cookies file
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("secrets/youtube_cookies.txt")
+          lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          if not lines:
+              raise SystemExit("YOUTUBE_COOKIES_TXT produced an empty cookies file")
+          if not lines[0].startswith(("# Netscape HTTP Cookie File", "# HTTP Cookie File")):
+              raise SystemExit("YOUTUBE_COOKIES_TXT must be raw Netscape cookies.txt content, not base64 or JSON")
+          youtube_lines = [
+              line for line in lines
+              if not line.startswith("#") and ("youtube.com" in line or "google.com" in line)
+          ]
+          if not youtube_lines:
+              raise SystemExit("YOUTUBE_COOKIES_TXT has no youtube.com/google.com cookie rows")
+          print(f"Validated YouTube cookies file: {len(lines)} lines, {len(youtube_lines)} relevant rows")
+          PY
+
+      - name: Check Colab CLI availability
+        if: env.DOWNLOAD_BACKEND == 'colab'
+        run: colab version
+
+      - name: Validate YouTube upload auth
+        run: viral-pipeline auth-youtube-upload
+
+      - name: Run tennis pipeline
+        run: python scripts/run_pipeline_until_upload.py
+
+      - name: Summarize tennis pipeline run
+        if: always()
+        env:
+          PIPELINE_SUMMARY_LABEL: Tennis Shorts Pipeline
+        run: python scripts/summarize_pipeline_run.py
+
+      - name: Upload tennis pipeline diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennis-pipeline-diagnostics-${{ github.run_id }}
+          path: |
+            data/tennis_source_video_history.json
+            workdir/runs/**/context.json
+            workdir/runs/**/publish/publish_manifest.json
+            workdir/runs/**/upload/youtube_upload.json
+            workdir/runs/**/render/*.debug.json
+            workdir/runs/**/downloads/colab_batch_job.json
+            workdir/runs/**/downloads/result.json
+          retention-days: 3
+
+      - name: Cleanup bulky tennis pipeline state
+        if: always()
+        run: python scripts/cleanup_pipeline_state.py
+
+      - name: Save updated tennis pipeline state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/tennis_source_video_history.json
+          key: tennis-pipeline-state-v1-${{ github.run_id }}

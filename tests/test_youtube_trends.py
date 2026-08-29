@@ -518,6 +518,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
     football = Settings(_env_file=None, content_domain="football")
     cricket = Settings(_env_file=None, content_domain="cricket")
     basketball = Settings(_env_file=None, content_domain="basketball")
+    tennis = Settings(_env_file=None, content_domain="tennis")
 
     assert kids.content_label == "Funny Kid Clips"
     assert kids.source_languages == "en,hi"
@@ -537,6 +538,11 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert basketball.source_languages == "en"
     assert basketball.basketball_query_adjectives.split(",")[0] == "unreal"
     assert basketball.basketball_query_types.split(",")[0] == "basketball dunks"
+
+    assert tennis.content_label == "Tennis Moments"
+    assert tennis.source_languages == "en"
+    assert tennis.tennis_query_adjectives.split(",")[0] == "unreal"
+    assert tennis.tennis_query_types.split(",")[0] == "tennis rallies"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -698,6 +704,41 @@ def test_basketball_relevance_rejects_gameplay() -> None:
 
     assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
     assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
+
+
+def test_tennis_short_queries_stay_inside_selected_theme() -> None:
+    settings = Settings(_env_file=None, content_domain="tennis")
+
+    queries = _shorts_search_queries("unreal tennis rallies shorts", "en", settings)
+
+    assert queries
+    assert all("tennis" in query.lower() for query in queries)
+    assert all(any(term in query.lower() for term in ("rally", "rallies")) for query in queries)
+    assert not any("viral tennis moments" in query.lower() for query in queries)
+
+
+def test_tennis_relevance_rejects_tutorials_and_games() -> None:
+    settings = Settings(_env_file=None, content_domain="tennis")
+    real_moment = YouTubeVideo(
+        id="rally",
+        trend_id="trend-1",
+        title="Unreal tennis rally winner #shorts",
+        url="https://www.youtube.com/watch?v=rally",
+        channel_title="Tennis Moments",
+        view_count=1_000_000,
+        like_count=100_000,
+        metadata={"tags": ["tennis", "rally", "winner", "atp"]},
+    )
+    game = real_moment.model_copy(
+        update={
+            "id": "game",
+            "title": "Tennis Clash gameplay tutorial #shorts",
+            "metadata": {"tags": ["tennis", "clash", "gameplay", "tutorial"]},
+        }
+    )
+
+    assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
+    assert _domain_relevance_score(settings, game, game.title) < 0.55
 
 
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:

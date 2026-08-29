@@ -712,6 +712,145 @@ BASKETBALL_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+TENNIS_CORE_TERMS = {
+    "ace",
+    "aces",
+    "atp",
+    "backhand",
+    "baseline",
+    "court",
+    "drop",
+    "forehand",
+    "lob",
+    "match",
+    "net",
+    "point",
+    "rally",
+    "rallies",
+    "return",
+    "serve",
+    "serves",
+    "shot",
+    "shots",
+    "smash",
+    "tennis",
+    "volley",
+    "volleys",
+    "winner",
+    "winners",
+    "wta",
+}
+
+TENNIS_MOMENT_TERMS = {
+    "amazing",
+    "best",
+    "comeback",
+    "crazy",
+    "dramatic",
+    "epic",
+    "impossible",
+    "incredible",
+    "insane",
+    "last",
+    "legendary",
+    "match",
+    "moment",
+    "moments",
+    "point",
+    "shocking",
+    "unbelievable",
+    "unforgettable",
+    "unreal",
+    "unexpected",
+    "viral",
+    "winner",
+}
+
+TENNIS_EXCLUDED_TERMS = {
+    "cartoon",
+    "clash",
+    "edit",
+    "edits",
+    "gameplay",
+    "gaming",
+    "highlights",
+    "interview",
+    "lesson",
+    "lyrics",
+    "minecraft",
+    "news",
+    "podcast",
+    "prediction",
+    "reaction",
+    "roblox",
+    "schedule",
+    "score",
+    "scores",
+    "song",
+    "talk",
+    "talks",
+    "tips",
+    "trailer",
+    "tutorial",
+}
+
+TENNIS_THEME_QUERIES: dict[str, list[str]] = {
+    "rallies": [
+        "unreal tennis rallies shorts",
+        "longest tennis rallies shorts",
+        "insane tennis rally points shorts",
+        "impossible tennis rallies shorts",
+    ],
+    "winners": [
+        "epic tennis winners shorts",
+        "unbelievable tennis passing shot winners shorts",
+        "best tennis forehand winners shorts",
+        "insane tennis backhand winners shorts",
+    ],
+    "aces": [
+        "best tennis aces shorts",
+        "impossible tennis serves shorts",
+        "fastest tennis aces shorts",
+        "unbelievable tennis serve shorts",
+    ],
+    "saves": [
+        "impossible tennis saves shorts",
+        "unreal tennis defensive shots shorts",
+        "best tennis retrievals shorts",
+        "insane tennis get shots shorts",
+    ],
+    "volleys": [
+        "epic tennis volleys shorts",
+        "best tennis net points shorts",
+        "insane tennis smash shots shorts",
+        "unbelievable tennis volley winners shorts",
+    ],
+    "match_points": [
+        "dramatic tennis match points shorts",
+        "unforgettable tennis match winning points shorts",
+        "tennis last point winners shorts",
+        "epic tennis tiebreak points shorts",
+    ],
+    "drop_shots": [
+        "insane tennis drop shots shorts",
+        "best tennis lobs shorts",
+        "impossible tennis touch shots shorts",
+        "unbelievable tennis drop shot winners shorts",
+    ],
+    "comebacks": [
+        "legendary tennis comebacks shorts",
+        "tennis match point saves shorts",
+        "dramatic tennis comeback points shorts",
+        "unforgettable tennis moments shorts",
+    ],
+    "moments": [
+        "unforgettable tennis moments shorts",
+        "shocking tennis moments shorts",
+        "tennis moments that shocked everyone shorts",
+        "crazy tennis moments shorts",
+    ],
+}
+
 
 class YouTubeApiError(RuntimeError):
     """Raised when a YouTube API call fails without exposing credentials."""
@@ -935,6 +1074,12 @@ def _ensure_basketball_query(query: str) -> str:
     return f"basketball {query}"
 
 
+def _ensure_tennis_query(query: str) -> str:
+    if "tennis" in query.lower():
+        return query
+    return f"tennis {query}"
+
+
 def _domain_search_query(query: str, settings: Settings | None) -> str:
     if settings and settings.content_domain == "football":
         return _ensure_football_query(query)
@@ -942,6 +1087,8 @@ def _domain_search_query(query: str, settings: Settings | None) -> str:
         return _ensure_cricket_query(query)
     if settings and settings.content_domain == "basketball":
         return _ensure_basketball_query(query)
+    if settings and settings.content_domain == "tennis":
+        return _ensure_tennis_query(query)
     return query
 
 
@@ -1027,6 +1174,32 @@ def _basketball_theme_search_queries(query: str) -> list[str]:
     return [query, *BASKETBALL_THEME_QUERIES[theme]]
 
 
+def _tennis_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("rally", "rallies")):
+        return "rallies"
+    if any(term in lowered for term in ("ace", "aces", "serve", "serves")):
+        return "aces"
+    if any(term in lowered for term in ("save", "saves", "defensive", "retrieval")):
+        return "saves"
+    if any(term in lowered for term in ("volley", "volleys", "smash", "net point")):
+        return "volleys"
+    if any(term in lowered for term in ("match point", "match winner", "tiebreak", "last point")):
+        return "match_points"
+    if any(term in lowered for term in ("drop shot", "drop shots", "lob", "lobs")):
+        return "drop_shots"
+    if any(term in lowered for term in ("comeback", "comebacks", "point save")):
+        return "comebacks"
+    if any(term in lowered for term in ("winner", "winners", "forehand", "backhand", "passing")):
+        return "winners"
+    return "moments"
+
+
+def _tennis_theme_search_queries(query: str) -> list[str]:
+    theme = _tennis_theme(query)
+    return [query, *TENNIS_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -1065,6 +1238,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _basketball_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "tennis":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _tennis_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -1303,6 +1481,50 @@ def _basketball_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _tennis_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & TENNIS_CORE_TERMS
+    moment_matches = tokens & TENNIS_MOMENT_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & TENNIS_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & TENNIS_CORE_TERMS
+    title_moment_matches = title_tokens & TENNIS_MOMENT_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.38, 0.2 + len(core_matches) * 0.035)
+    if moment_matches:
+        score += min(0.34, 0.14 + len(moment_matches) * 0.04)
+    if query_matches:
+        score += min(0.18, len(query_matches) * 0.035)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.3
+    if not moment_matches:
+        score -= 0.12
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.32
+    if not title_moment_matches:
+        score -= 0.08
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -1316,11 +1538,13 @@ def _domain_relevance_score(
         return _cricket_relevance_score(video, query)
     if settings and settings.content_domain == "basketball":
         return _basketball_relevance_score(video, query)
+    if settings and settings.content_domain == "tennis":
+        return _tennis_relevance_score(video, query)
     return 0.75
 
 
 def _domain_relevance_threshold(settings: Settings | None) -> float | None:
-    if settings and settings.content_domain in {"football", "cricket", "basketball"}:
+    if settings and settings.content_domain in {"football", "cricket", "basketball", "tennis"}:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
         return 0.45
@@ -1455,7 +1679,7 @@ class CompilationQueryProvider:
             for query in queries
             for language in languages
         ]
-        randomized_query_domains = {"kids_funny", "football", "cricket", "basketball"}
+        randomized_query_domains = {"kids_funny", "football", "cricket", "basketball", "tennis"}
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
         candidates = sorted(
@@ -1528,6 +1752,16 @@ def _basketball_query_combinations(settings: Settings) -> list[str]:
     ]
 
 
+def _tennis_query_combinations(settings: Settings) -> list[str]:
+    adjectives = _settings_csv(settings.tennis_query_adjectives)
+    types = _settings_csv(settings.tennis_query_types)
+    return [
+        _ensure_shorts_query(_ensure_tennis_query(f"{adjective} {query_type}"))
+        for query_type in types
+        for adjective in adjectives
+    ]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
@@ -1539,6 +1773,10 @@ def _compilation_queries(settings: Settings) -> list[str]:
         queries = [*generated, *configured]
     elif settings.content_domain == "basketball":
         generated = _basketball_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "tennis":
+        generated = _tennis_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -1736,7 +1974,7 @@ class YouTubeDataProvider:
         query_pool_size = (
             min(50, pool_size)
             if self.settings
-            and self.settings.content_domain in {"football", "cricket", "basketball"}
+            and self.settings.content_domain in {"football", "cricket", "basketball", "tennis"}
             else pool_size
         )
         videos: list[YouTubeVideo] = []
@@ -1744,7 +1982,7 @@ class YouTubeDataProvider:
         search_queries = _shorts_search_queries(trend.title, language, self.settings)
         focused_domain = (
             self.settings is not None
-            and self.settings.content_domain in {"football", "cricket", "basketball"}
+            and self.settings.content_domain in {"football", "cricket", "basketball", "tennis"}
         )
         if focused_domain:
             query_count = max(1, self.settings.youtube_focused_search_query_count)
@@ -1804,7 +2042,8 @@ class YouTubeDataProvider:
                     videos.append(video)
                 if (
                     self.settings
-                    and self.settings.content_domain not in {"football", "cricket", "basketball"}
+                    and self.settings.content_domain
+                    not in {"football", "cricket", "basketball", "tennis"}
                     and len(videos) >= pool_size
                 ):
                     break
@@ -1812,7 +2051,8 @@ class YouTubeDataProvider:
                 break
             if (
                 self.settings
-                and self.settings.content_domain not in {"football", "cricket", "basketball"}
+                and self.settings.content_domain
+                not in {"football", "cricket", "basketball", "tennis"}
                 and len(videos) >= pool_size
             ):
                 break
@@ -2847,7 +3087,7 @@ def build_providers(
     trend_provider: TrendProvider = (
         CompilationQueryProvider(settings)
         if settings.content_domain
-        in {"kids_funny", "football", "cricket", "basketball", "compilation"}
+        in {"kids_funny", "football", "cricket", "basketball", "tennis", "compilation"}
         else YouTubeTrendProvider(settings, youtube_client)
         if youtube_client
         else LocalTrendProvider()

@@ -129,6 +129,35 @@ BASKETBALL_EVENT_KEYWORDS = (
     "overtime,quarter,arena,crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
+TENNIS_ACTIVITY_SEED_QUERIES = (
+    "viral tennis moments,tennis shorts,tennis challenge,tennis compilation,"
+    "viral tennis trend,tennis trick shots,tennis rallies,tennis winners"
+)
+
+TENNIS_COMPILATION_QUERIES = (
+    "unreal tennis rallies shorts,epic tennis winners shorts,"
+    "unforgettable tennis moments shorts,insane tennis shots shorts,"
+    "best tennis aces shorts,impossible tennis saves shorts"
+)
+
+TENNIS_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
+)
+
+TENNIS_QUERY_TYPES = (
+    "tennis rallies,tennis winners,tennis shots,tennis aces,tennis saves,"
+    "tennis volleys,tennis passing shots,tennis match points,tennis drop shots,"
+    "tennis lobs,tennis comebacks,tennis forehands,tennis backhands"
+)
+
+TENNIS_EVENT_KEYWORDS = (
+    "tennis,atp,wta,grand slam,rally,rallies,winner,winners,ace,aces,serve,serves,"
+    "forehand,backhand,volley,volleys,smash,smashes,drop shot,passing shot,lob,lobs,"
+    "return,returns,baseline,court,net,match,point,match point,comeback,tiebreak,"
+    "set,sets,game,games,crowd,fans,crazy,unbelievable,incredible,impossible"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -189,6 +218,8 @@ class Settings(BaseSettings):
     cricket_query_types: str = CRICKET_QUERY_TYPES
     basketball_query_adjectives: str = BASKETBALL_QUERY_ADJECTIVES
     basketball_query_types: str = BASKETBALL_QUERY_TYPES
+    tennis_query_adjectives: str = TENNIS_QUERY_ADJECTIVES
+    tennis_query_types: str = TENNIS_QUERY_TYPES
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -267,6 +298,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = BASKETBALL_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = BASKETBALL_EVENT_KEYWORDS
+        elif self.content_domain == "tennis":
+            if not self.content_label:
+                self.content_label = "Tennis Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = TENNIS_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = TENNIS_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = TENNIS_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"
