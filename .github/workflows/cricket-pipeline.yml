@@ -3,7 +3,7 @@ name: scheduled-cricket-shorts-pipeline
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2,8,14,20 * * *"
+    - cron: "0 1,7,13,19 * * *"
 
 concurrency:
   group: cricket-youtube-shorts-pipeline
