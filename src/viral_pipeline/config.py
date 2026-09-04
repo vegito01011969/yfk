@@ -215,6 +215,35 @@ UNEXPECTED_EVENT_KEYWORDS = (
     "insane,viral,accident,rescue,save,saves"
 )
 
+SATISFYING_ACTIVITY_SEED_QUERIES = (
+    "oddly satisfying moments,cleaning transformations,perfect precision work,"
+    "restoration process,mesmerizing machines,satisfying art process,"
+    "before and after transformations,perfect fit moments,kinetic sand crushing"
+)
+
+SATISFYING_COMPILATION_QUERIES = (
+    "oddly satisfying moments shorts,cleaning transformations shorts,"
+    "perfectly cut things shorts,restoration process shorts,"
+    "machines working perfectly shorts,satisfying art process shorts,"
+    "before and after transformations shorts,perfect precision fits shorts,"
+    "kinetic sand slime crushing shorts,try not to feel satisfied shorts"
+)
+
+SATISFYING_QUERY_PILLARS = (
+    "oddly satisfying moments,cleaning transformations,perfectly cut things,"
+    "restoration videos,perfect machines and processes,smooth art and craft,"
+    "before and after transformations,perfect fits and precision,"
+    "sand slime and crushing,try not to feel satisfied"
+)
+
+SATISFYING_EVENT_KEYWORDS = (
+    "satisfying,oddly satisfying,cleaning,clean,pressure washing,carpet cleaning,"
+    "restoration,restore,precision,perfect fit,align,organize,cutting,slicing,"
+    "crushing,machine,manufacturing,process,packaging,painting,woodworking,"
+    "pottery,resin,carving,sculpting,before and after,transformation,"
+    "kinetic sand,slime,mesmerizing,smooth"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -280,6 +309,7 @@ class Settings(BaseSettings):
     formula1_query_adjectives: str = FORMULA1_QUERY_ADJECTIVES
     formula1_query_types: str = FORMULA1_QUERY_TYPES
     unexpected_query_pillars: str = UNEXPECTED_QUERY_PILLARS
+    satisfying_query_pillars: str = SATISFYING_QUERY_PILLARS
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -391,6 +421,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = UNEXPECTED_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = UNEXPECTED_EVENT_KEYWORDS
+        elif self.content_domain == "satisfying":
+            if not self.content_label:
+                self.content_label = "Satisfying Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = SATISFYING_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = SATISFYING_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = SATISFYING_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"

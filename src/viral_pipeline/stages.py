@@ -1518,6 +1518,7 @@ def _require_expected_upload_channel_for_domain(settings: Settings) -> None:
         "tennis",
         "formula1",
         "unexpected",
+        "satisfying",
     }
     if (
         settings.content_domain in guarded_domains

@@ -370,6 +370,111 @@ UNEXPECTED_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+SATISFYING_CORE_TERMS = {
+    "after",
+    "before",
+    "clean",
+    "cleaning",
+    "crushing",
+    "cutting",
+    "machine",
+    "machines",
+    "perfect",
+    "precision",
+    "process",
+    "restoration",
+    "restore",
+    "satisfying",
+    "slime",
+    "smooth",
+    "transformation",
+}
+
+SATISFYING_PAYOFF_TERMS = {
+    "align",
+    "art",
+    "clean",
+    "crushing",
+    "fit",
+    "kinetic",
+    "mesmerizing",
+    "oddly",
+    "perfect",
+    "precision",
+    "restore",
+    "sand",
+    "satisfying",
+    "smooth",
+    "transformation",
+}
+
+SATISFYING_EXCLUDED_TERMS = {
+    "animation",
+    "cartoon",
+    "game",
+    "gameplay",
+    "movie",
+    "music",
+    "podcast",
+    "reaction",
+    "song",
+    "trailer",
+    "tutorial",
+}
+
+SATISFYING_THEME_QUERIES: dict[str, list[str]] = {
+    "oddly_satisfying": [
+        "oddly satisfying moments shorts",
+        "mesmerizing satisfying videos shorts",
+        "satisfying clips you cannot stop watching shorts",
+    ],
+    "cleaning": [
+        "satisfying cleaning transformations shorts",
+        "pressure washing transformation shorts",
+        "carpet cleaning satisfying shorts",
+    ],
+    "cutting": [
+        "perfectly cut things shorts",
+        "satisfying slicing and cutting shorts",
+        "precision cutting satisfying shorts",
+    ],
+    "restoration": [
+        "satisfying restoration videos shorts",
+        "restore old objects satisfying shorts",
+        "restoration transformation shorts",
+    ],
+    "machines": [
+        "machines working perfectly shorts",
+        "satisfying manufacturing process shorts",
+        "perfect packaging machines shorts",
+    ],
+    "art_craft": [
+        "smooth satisfying art process shorts",
+        "satisfying woodworking pottery resin shorts",
+        "satisfying carving sculpting shorts",
+    ],
+    "before_after": [
+        "satisfying before and after transformations shorts",
+        "dramatic object transformation shorts",
+        "furniture car restoration before after shorts",
+    ],
+    "precision": [
+        "perfect fits and precision shorts",
+        "perfect alignment satisfying shorts",
+        "organizing perfectly satisfying shorts",
+    ],
+    "sand_slime_crushing": [
+        "kinetic sand slime crushing satisfying shorts",
+        "satisfying crushing videos shorts",
+        "satisfying slime mixing shorts",
+    ],
+    "mixed": [
+        "try not to feel satisfied shorts",
+        "most satisfying clips shorts",
+        "satisfying videos compilation shorts",
+    ],
+}
+
 FOOTBALL_CORE_TERMS = {
     "assist",
     "ball",
@@ -1498,6 +1603,34 @@ def _unexpected_theme_search_queries(query: str) -> list[str]:
     return [query, *UNEXPECTED_THEME_QUERIES[theme]]
 
 
+def _satisfying_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("cleaning", "pressure washing", "carpet")):
+        return "cleaning"
+    if any(term in lowered for term in ("cut", "slicing", "cutting")):
+        return "cutting"
+    if any(term in lowered for term in ("restoration", "restore")):
+        return "restoration"
+    if any(term in lowered for term in ("machine", "manufacturing", "packaging", "process")):
+        return "machines"
+    if any(term in lowered for term in ("art", "woodworking", "pottery", "resin", "carving")):
+        return "art_craft"
+    if any(term in lowered for term in ("before", "after", "transformation")):
+        return "before_after"
+    if any(term in lowered for term in ("fit", "precision", "align", "organize")):
+        return "precision"
+    if any(term in lowered for term in ("sand", "slime", "crushing")):
+        return "sand_slime_crushing"
+    if "try not" in lowered:
+        return "mixed"
+    return "oddly_satisfying"
+
+
+def _satisfying_theme_search_queries(query: str) -> list[str]:
+    theme = _satisfying_theme(query)
+    return [query, *SATISFYING_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -1551,6 +1684,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _unexpected_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "satisfying":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _satisfying_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -1921,6 +2059,50 @@ def _unexpected_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _satisfying_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & SATISFYING_CORE_TERMS
+    payoff_matches = tokens & SATISFYING_PAYOFF_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & SATISFYING_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & SATISFYING_CORE_TERMS
+    title_payoff_matches = title_tokens & SATISFYING_PAYOFF_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.36, 0.16 + len(core_matches) * 0.04)
+    if payoff_matches:
+        score += min(0.34, 0.16 + len(payoff_matches) * 0.045)
+    if query_matches:
+        score += min(0.2, len(query_matches) * 0.04)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.24
+    if not payoff_matches:
+        score -= 0.16
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.22
+    if not title_payoff_matches:
+        score -= 0.1
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -1940,12 +2122,20 @@ def _domain_relevance_score(
         return _formula1_relevance_score(video, query)
     if settings and settings.content_domain == "unexpected":
         return _unexpected_relevance_score(video, query)
+    if settings and settings.content_domain == "satisfying":
+        return _satisfying_relevance_score(video, query)
     return 0.75
 
 
 def _domain_relevance_threshold(settings: Settings | None) -> float | None:
     if settings and settings.content_domain in {
-        "football", "cricket", "basketball", "tennis", "formula1", "unexpected"
+        "football",
+        "cricket",
+        "basketball",
+        "tennis",
+        "formula1",
+        "unexpected",
+        "satisfying",
     }:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
@@ -2089,6 +2279,7 @@ class CompilationQueryProvider:
             "tennis",
             "formula1",
             "unexpected",
+            "satisfying",
         }
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
@@ -2187,6 +2378,11 @@ def _unexpected_query_combinations(settings: Settings) -> list[str]:
     return [_ensure_shorts_query(query) for query in pillars]
 
 
+def _satisfying_query_combinations(settings: Settings) -> list[str]:
+    pillars = _settings_csv(settings.satisfying_query_pillars)
+    return [_ensure_shorts_query(query) for query in pillars]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
@@ -2210,6 +2406,10 @@ def _compilation_queries(settings: Settings) -> list[str]:
         queries = [*generated, *configured]
     elif settings.content_domain == "unexpected":
         generated = _unexpected_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "satisfying":
+        generated = _satisfying_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -2408,7 +2608,15 @@ class YouTubeDataProvider:
             min(50, pool_size)
             if self.settings
             and self.settings.content_domain
-            in {"football", "cricket", "basketball", "tennis", "formula1", "unexpected"}
+            in {
+                "football",
+                "cricket",
+                "basketball",
+                "tennis",
+                "formula1",
+                "unexpected",
+                "satisfying",
+            }
             else pool_size
         )
         videos: list[YouTubeVideo] = []
@@ -2417,7 +2625,15 @@ class YouTubeDataProvider:
         focused_domain = (
             self.settings is not None
             and self.settings.content_domain
-            in {"football", "cricket", "basketball", "tennis", "formula1", "unexpected"}
+            in {
+                "football",
+                "cricket",
+                "basketball",
+                "tennis",
+                "formula1",
+                "unexpected",
+                "satisfying",
+            }
         )
         if focused_domain:
             query_count = max(1, self.settings.youtube_focused_search_query_count)
@@ -2485,6 +2701,7 @@ class YouTubeDataProvider:
                         "tennis",
                         "formula1",
                         "unexpected",
+                        "satisfying",
                     }
                     and len(videos) >= pool_size
                 ):
@@ -2501,6 +2718,7 @@ class YouTubeDataProvider:
                     "tennis",
                     "formula1",
                     "unexpected",
+                    "satisfying",
                 }
                 and len(videos) >= pool_size
             ):
@@ -3544,6 +3762,7 @@ def build_providers(
             "tennis",
             "formula1",
             "unexpected",
+            "satisfying",
             "compilation",
         }
         else YouTubeTrendProvider(settings, youtube_client)
