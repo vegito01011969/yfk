@@ -4,14 +4,31 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 *.pyc
+# Local environment overrides. Keep the empty, documented template tracked.
 .env
 .env.local
+.env.*
+!.env.example
 data/
 workdir/
 dist/
 build/
 *.egg-info/
 secrets/
+
+# Local credentials exported by common OAuth, cloud, and certificate tooling.
+*oauth*token*.json
+*client*secret*.json
+*credential*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+
+# Operating-system file-manager metadata is never useful in the repository.
+.DS_Store
+Thumbs.db
 
 # Local yt-dlp/cookie exports and accidental root-level media downloads
 /cookies.txt
