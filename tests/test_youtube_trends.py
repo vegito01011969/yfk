@@ -520,6 +520,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
     basketball = Settings(_env_file=None, content_domain="basketball")
     tennis = Settings(_env_file=None, content_domain="tennis")
     formula1 = Settings(_env_file=None, content_domain="formula1")
+    unexpected = Settings(_env_file=None, content_domain="unexpected")
 
     assert kids.content_label == "Funny Kid Clips"
     assert kids.source_languages == "en,hi"
@@ -549,6 +550,10 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert formula1.source_languages == "en"
     assert formula1.formula1_query_adjectives.split(",")[0] == "unreal"
     assert formula1.formula1_query_types.split(",")[0] == "formula 1 overtakes"
+
+    assert unexpected.content_label == "Unexpected Moments"
+    assert unexpected.source_languages == "en"
+    assert unexpected.unexpected_query_pillars.split(",")[0] == "too close"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -778,6 +783,40 @@ def test_formula1_relevance_rejects_simulator_gameplay() -> None:
             "id": "gameplay",
             "title": "Formula 1 simulator gameplay tutorial #shorts",
             "metadata": {"tags": ["formula 1", "simulator", "gameplay", "tutorial"]},
+        }
+    )
+
+    assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
+    assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
+
+
+def test_unexpected_short_queries_stay_inside_selected_pillar() -> None:
+    settings = Settings(_env_file=None, content_domain="unexpected")
+
+    queries = _shorts_search_queries("impossible luck shorts", "en", settings)
+
+    assert queries
+    assert all(any(term in query.lower() for term in ("luck", "lucky")) for query in queries)
+    assert not any("perfect timing" in query.lower() for query in queries)
+
+
+def test_unexpected_relevance_rejects_gameplay() -> None:
+    settings = Settings(_env_file=None, content_domain="unexpected")
+    real_moment = YouTubeVideo(
+        id="timing",
+        trend_id="trend-1",
+        title="Perfect timing caught on camera #shorts",
+        url="https://www.youtube.com/watch?v=timing",
+        channel_title="Unexpected Moments",
+        view_count=1_000_000,
+        like_count=100_000,
+        metadata={"tags": ["perfect timing", "caught on camera", "unexpected"]},
+    )
+    gameplay = real_moment.model_copy(
+        update={
+            "id": "gameplay",
+            "title": "Perfect timing gameplay tutorial #shorts",
+            "metadata": {"tags": ["gameplay", "tutorial", "perfect timing"]},
         }
     )
 

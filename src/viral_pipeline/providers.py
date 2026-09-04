@@ -118,7 +118,6 @@ STOPWORDS = {
     "out",
     "part",
     "performance",
-    "reaction",
     "shorts",
     "song",
     "songs",
@@ -269,6 +268,106 @@ KIDS_FUNNY_EXCLUDED_TERMS = {
     "roblox",
     "song",
     "trailer",
+}
+
+UNEXPECTED_CORE_TERMS = {
+    "accident",
+    "camera",
+    "caught",
+    "chaos",
+    "close",
+    "fail",
+    "fails",
+    "happened",
+    "luck",
+    "miss",
+    "near",
+    "reaction",
+    "reactions",
+    "save",
+    "saves",
+    "surprise",
+    "timing",
+    "unexpected",
+}
+
+UNEXPECTED_PAYOFF_TERMS = {
+    "chaos",
+    "close",
+    "impossible",
+    "incredible",
+    "insane",
+    "last",
+    "luck",
+    "miss",
+    "nobody",
+    "outcome",
+    "perfect",
+    "reaction",
+    "save",
+    "shocked",
+    "surprise",
+    "timing",
+    "unexpected",
+    "unbelievable",
+}
+
+UNEXPECTED_EXCLUDED_TERMS = {
+    "animation",
+    "cartoon",
+    "compilation",
+    "game",
+    "gameplay",
+    "movie",
+    "music",
+    "podcast",
+    "prank",
+    "song",
+    "trailer",
+    "tutorial",
+}
+
+UNEXPECTED_THEME_QUERIES: dict[str, list[str]] = {
+    "too_close": [
+        "too close moments caught on camera shorts",
+        "near miss caught on camera shorts",
+        "close calls shorts",
+    ],
+    "perfect_timing": [
+        "perfect timing caught on camera shorts",
+        "perfectly timed moments shorts",
+        "timing was perfect shorts",
+    ],
+    "impossible_saves": [
+        "impossible saves caught on camera shorts",
+        "last second saves shorts",
+        "incredible rescue moments shorts",
+    ],
+    "unexpected_outcomes": [
+        "unexpected outcomes caught on camera shorts",
+        "unexpected ending shorts",
+        "did not expect that shorts",
+    ],
+    "unexpected_reactions": [
+        "unexpected reactions caught on camera shorts",
+        "funny unexpected reactions shorts",
+        "shocked reactions shorts",
+    ],
+    "complete_chaos": [
+        "complete chaos caught on camera shorts",
+        "everything went wrong shorts",
+        "chaotic moments shorts",
+    ],
+    "impossible_luck": [
+        "impossible luck caught on camera shorts",
+        "luckiest moments shorts",
+        "unbelievable lucky moments shorts",
+    ],
+    "nobody_saw_that_coming": [
+        "nobody saw that coming shorts",
+        "what just happened caught on camera shorts",
+        "unexpected viral moments shorts",
+    ],
 }
 
 FOOTBALL_CORE_TERMS = {
@@ -1375,6 +1474,30 @@ def _formula1_theme_search_queries(query: str) -> list[str]:
     return [query, *FORMULA1_THEME_QUERIES[theme]]
 
 
+def _unexpected_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("close", "near miss", "near-miss")):
+        return "too_close"
+    if "timing" in lowered:
+        return "perfect_timing"
+    if any(term in lowered for term in ("save", "rescue", "last second")):
+        return "impossible_saves"
+    if any(term in lowered for term in ("outcome", "ending", "did not expect")):
+        return "unexpected_outcomes"
+    if "reaction" in lowered:
+        return "unexpected_reactions"
+    if any(term in lowered for term in ("chaos", "went wrong", "chaotic")):
+        return "complete_chaos"
+    if any(term in lowered for term in ("luck", "lucky")):
+        return "impossible_luck"
+    return "nobody_saw_that_coming"
+
+
+def _unexpected_theme_search_queries(query: str) -> list[str]:
+    theme = _unexpected_theme(query)
+    return [query, *UNEXPECTED_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -1423,6 +1546,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _formula1_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "unexpected":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _unexpected_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -1749,6 +1877,50 @@ def _formula1_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _unexpected_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & UNEXPECTED_CORE_TERMS
+    payoff_matches = tokens & UNEXPECTED_PAYOFF_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & UNEXPECTED_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & UNEXPECTED_CORE_TERMS
+    title_payoff_matches = title_tokens & UNEXPECTED_PAYOFF_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.34, 0.16 + len(core_matches) * 0.035)
+    if payoff_matches:
+        score += min(0.36, 0.16 + len(payoff_matches) * 0.045)
+    if query_matches:
+        score += min(0.2, len(query_matches) * 0.04)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.2
+    if not payoff_matches:
+        score -= 0.2
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.2
+    if not title_payoff_matches:
+        score -= 0.12
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -1766,12 +1938,14 @@ def _domain_relevance_score(
         return _tennis_relevance_score(video, query)
     if settings and settings.content_domain == "formula1":
         return _formula1_relevance_score(video, query)
+    if settings and settings.content_domain == "unexpected":
+        return _unexpected_relevance_score(video, query)
     return 0.75
 
 
 def _domain_relevance_threshold(settings: Settings | None) -> float | None:
     if settings and settings.content_domain in {
-        "football", "cricket", "basketball", "tennis", "formula1"
+        "football", "cricket", "basketball", "tennis", "formula1", "unexpected"
     }:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
@@ -1908,7 +2082,13 @@ class CompilationQueryProvider:
             for language in languages
         ]
         randomized_query_domains = {
-            "kids_funny", "football", "cricket", "basketball", "tennis", "formula1"
+            "kids_funny",
+            "football",
+            "cricket",
+            "basketball",
+            "tennis",
+            "formula1",
+            "unexpected",
         }
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
@@ -2002,6 +2182,11 @@ def _formula1_query_combinations(settings: Settings) -> list[str]:
     ]
 
 
+def _unexpected_query_combinations(settings: Settings) -> list[str]:
+    pillars = _settings_csv(settings.unexpected_query_pillars)
+    return [_ensure_shorts_query(query) for query in pillars]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
@@ -2021,6 +2206,10 @@ def _compilation_queries(settings: Settings) -> list[str]:
         queries = [*generated, *configured]
     elif settings.content_domain == "formula1":
         generated = _formula1_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "unexpected":
+        generated = _unexpected_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -2219,7 +2408,7 @@ class YouTubeDataProvider:
             min(50, pool_size)
             if self.settings
             and self.settings.content_domain
-            in {"football", "cricket", "basketball", "tennis", "formula1"}
+            in {"football", "cricket", "basketball", "tennis", "formula1", "unexpected"}
             else pool_size
         )
         videos: list[YouTubeVideo] = []
@@ -2228,7 +2417,7 @@ class YouTubeDataProvider:
         focused_domain = (
             self.settings is not None
             and self.settings.content_domain
-            in {"football", "cricket", "basketball", "tennis", "formula1"}
+            in {"football", "cricket", "basketball", "tennis", "formula1", "unexpected"}
         )
         if focused_domain:
             query_count = max(1, self.settings.youtube_focused_search_query_count)
@@ -2289,7 +2478,14 @@ class YouTubeDataProvider:
                 if (
                     self.settings
                     and self.settings.content_domain
-                    not in {"football", "cricket", "basketball", "tennis", "formula1"}
+                    not in {
+                        "football",
+                        "cricket",
+                        "basketball",
+                        "tennis",
+                        "formula1",
+                        "unexpected",
+                    }
                     and len(videos) >= pool_size
                 ):
                     break
@@ -2298,7 +2494,14 @@ class YouTubeDataProvider:
             if (
                 self.settings
                 and self.settings.content_domain
-                not in {"football", "cricket", "basketball", "tennis", "formula1"}
+                not in {
+                    "football",
+                    "cricket",
+                    "basketball",
+                    "tennis",
+                    "formula1",
+                    "unexpected",
+                }
                 and len(videos) >= pool_size
             ):
                 break
@@ -3334,7 +3537,14 @@ def build_providers(
         CompilationQueryProvider(settings)
         if settings.content_domain
         in {
-            "kids_funny", "football", "cricket", "basketball", "tennis", "formula1", "compilation"
+            "kids_funny",
+            "football",
+            "cricket",
+            "basketball",
+            "tennis",
+            "formula1",
+            "unexpected",
+            "compilation",
         }
         else YouTubeTrendProvider(settings, youtube_client)
         if youtube_client

@@ -190,6 +190,31 @@ FORMULA1_EVENT_KEYWORDS = (
     "podium,crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
+UNEXPECTED_ACTIVITY_SEED_QUERIES = (
+    "unexpected moments,close calls caught on camera,perfect timing moments,"
+    "impossible saves caught on camera,unexpected reactions,complete chaos moments,"
+    "impossible luck,nobody saw that coming"
+)
+
+UNEXPECTED_COMPILATION_QUERIES = (
+    "too close moments shorts,perfect timing moments shorts,"
+    "impossible saves caught on camera shorts,unexpected outcomes shorts,"
+    "unexpected reactions shorts,complete chaos moments shorts,"
+    "impossible luck moments shorts,nobody saw that coming shorts"
+)
+
+UNEXPECTED_QUERY_PILLARS = (
+    "too close,perfect timing,impossible saves,unexpected outcomes,"
+    "unexpected reactions,complete chaos,impossible luck,nobody saw that coming"
+)
+
+UNEXPECTED_EVENT_KEYWORDS = (
+    "close call,near miss,perfect timing,impossible save,last second save,"
+    "unexpected,outcome,reaction,chaos,luck,nobody saw,what happened,"
+    "caught on camera,fail,fails,surprise,shocked,unbelievable,incredible,"
+    "insane,viral,accident,rescue,save,saves"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -254,6 +279,7 @@ class Settings(BaseSettings):
     tennis_query_types: str = TENNIS_QUERY_TYPES
     formula1_query_adjectives: str = FORMULA1_QUERY_ADJECTIVES
     formula1_query_types: str = FORMULA1_QUERY_TYPES
+    unexpected_query_pillars: str = UNEXPECTED_QUERY_PILLARS
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -354,6 +380,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = FORMULA1_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = FORMULA1_EVENT_KEYWORDS
+        elif self.content_domain == "unexpected":
+            if not self.content_label:
+                self.content_label = "Unexpected Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = UNEXPECTED_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = UNEXPECTED_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = UNEXPECTED_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"
