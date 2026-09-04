@@ -2,7 +2,6 @@
 name = "viral-trend-pipeline"
 version = "0.1.0"
 description = "Automated pipeline for discovering viral trends and producing narrated YouTube compilation videos."
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.7",
