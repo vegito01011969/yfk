@@ -522,6 +522,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
     formula1 = Settings(_env_file=None, content_domain="formula1")
     unexpected = Settings(_env_file=None, content_domain="unexpected")
     satisfying = Settings(_env_file=None, content_domain="satisfying")
+    magic = Settings(_env_file=None, content_domain="magic")
 
     assert kids.content_label == "Funny Kid Clips"
     assert kids.source_languages == "en,hi"
@@ -559,6 +560,10 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert satisfying.content_label == "Satisfying Moments"
     assert satisfying.source_languages == "en"
     assert satisfying.satisfying_query_pillars.split(",")[0] == "oddly satisfying moments"
+
+    assert magic.content_label == "Magic Moments"
+    assert magic.source_languages == "en"
+    assert magic.magic_query_pillars.split(",")[0] == "card magic"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -864,6 +869,43 @@ def test_satisfying_relevance_rejects_gameplay() -> None:
 
     assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
     assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
+
+
+def test_magic_short_queries_stay_inside_selected_pillar() -> None:
+    settings = Settings(_env_file=None, content_domain="magic")
+
+    queries = _shorts_search_queries("mind reading and predictions shorts", "en", settings)
+
+    assert queries
+    assert all(
+        any(term in query.lower() for term in ("mind", "mentalism", "thought", "prediction"))
+        for query in queries
+    )
+    assert not any("card magic" in query.lower() for query in queries)
+
+
+def test_magic_relevance_rejects_tutorial() -> None:
+    settings = Settings(_env_file=None, content_domain="magic")
+    real_moment = YouTubeVideo(
+        id="card-magic",
+        trend_id="trend-1",
+        title="Impossible card magic reveal #shorts",
+        url="https://www.youtube.com/watch?v=card-magic",
+        channel_title="FlawedMagic",
+        view_count=1_000_000,
+        like_count=100_000,
+        metadata={"tags": ["card magic", "impossible", "magic reveal"]},
+    )
+    tutorial = real_moment.model_copy(
+        update={
+            "id": "tutorial",
+            "title": "Card magic tutorial explained #shorts",
+            "metadata": {"tags": ["card magic", "tutorial", "explained"]},
+        }
+    )
+
+    assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
+    assert _domain_relevance_score(settings, tutorial, tutorial.title) < 0.55
 
 
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:

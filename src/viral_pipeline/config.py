@@ -244,6 +244,30 @@ SATISFYING_EVENT_KEYWORDS = (
     "kinetic sand,slime,mesmerizing,smooth"
 )
 
+MAGIC_ACTIVITY_SEED_QUERIES = (
+    "card magic tricks,street magic reactions,mind reading magic,impossible illusions,"
+    "coin magic,everyday object magic,magic reveals,funny magic fails,sleight of hand"
+)
+
+MAGIC_COMPILATION_QUERIES = (
+    "impossible card magic shorts,street magic reactions shorts,mind reading magic shorts,"
+    "impossible illusions shorts,coin magic tricks shorts,best magic reveals shorts,"
+    "funny magic fails shorts,sleight of hand shorts"
+)
+
+MAGIC_QUERY_PILLARS = (
+    "card magic,street magic reactions,mind reading and predictions,"
+    "impossible illusions,coin and everyday object magic,best magic reveals,"
+    "funny magic moments,sleight of hand"
+)
+
+MAGIC_EVENT_KEYWORDS = (
+    "magic,magician,card trick,card magic,street magic,mind reading,mentalism,"
+    "prediction,illusion,disappear,appearing,levitation,floating,coin magic,"
+    "ring magic,money magic,reveal,reaction,sleight of hand,close up magic,"
+    "magic fail,magic prank,impossible trick"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -310,6 +334,7 @@ class Settings(BaseSettings):
     formula1_query_types: str = FORMULA1_QUERY_TYPES
     unexpected_query_pillars: str = UNEXPECTED_QUERY_PILLARS
     satisfying_query_pillars: str = SATISFYING_QUERY_PILLARS
+    magic_query_pillars: str = MAGIC_QUERY_PILLARS
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -432,6 +457,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = SATISFYING_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = SATISFYING_EVENT_KEYWORDS
+        elif self.content_domain == "magic":
+            if not self.content_label:
+                self.content_label = "Magic Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = MAGIC_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = MAGIC_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = MAGIC_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"

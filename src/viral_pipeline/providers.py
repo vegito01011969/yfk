@@ -475,6 +475,95 @@ SATISFYING_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+MAGIC_CORE_TERMS = {
+    "card",
+    "cards",
+    "illusion",
+    "magic",
+    "magician",
+    "mentalism",
+    "prediction",
+    "reveal",
+    "sleight",
+    "street",
+    "trick",
+    "tricks",
+}
+
+MAGIC_PAYOFF_TERMS = {
+    "appear",
+    "card",
+    "coin",
+    "disappear",
+    "floating",
+    "impossible",
+    "illusion",
+    "mind",
+    "prediction",
+    "reaction",
+    "reveal",
+    "sleight",
+    "transform",
+    "vanish",
+}
+
+MAGIC_EXCLUDED_TERMS = {
+    "animation",
+    "cartoon",
+    "explained",
+    "game",
+    "gameplay",
+    "movie",
+    "music",
+    "podcast",
+    "song",
+    "trailer",
+    "tutorial",
+}
+
+MAGIC_THEME_QUERIES: dict[str, list[str]] = {
+    "card_magic": [
+        "impossible card magic tricks shorts",
+        "card trick sleight of hand shorts",
+        "card magic predictions shorts",
+    ],
+    "street_reactions": [
+        "unbelievable street magic reactions shorts",
+        "street magician audience reactions shorts",
+        "crazy street magic shorts",
+    ],
+    "mind_reading": [
+        "mind reading magic predictions shorts",
+        "mentalism impossible guesses shorts",
+        "thought reading magic shorts",
+    ],
+    "illusions": [
+        "impossible magic illusions shorts",
+        "objects disappear magic shorts",
+        "floating magic illusion shorts",
+    ],
+    "everyday_objects": [
+        "coin and everyday object magic shorts",
+        "phone ring money magic tricks shorts",
+        "impossible coin magic shorts",
+    ],
+    "reveals": [
+        "best magic reveals shorts",
+        "impossible magic final reveal shorts",
+        "magic reveal reactions shorts",
+    ],
+    "funny": [
+        "funny magic fails shorts",
+        "funny magician moments shorts",
+        "unexpected magic reactions shorts",
+    ],
+    "sleight_of_hand": [
+        "insane sleight of hand shorts",
+        "close up magic fast hands shorts",
+        "impossible hand magic tricks shorts",
+    ],
+}
+
 FOOTBALL_CORE_TERMS = {
     "assist",
     "ball",
@@ -1631,6 +1720,30 @@ def _satisfying_theme_search_queries(query: str) -> list[str]:
     return [query, *SATISFYING_THEME_QUERIES[theme]]
 
 
+def _magic_theme(query: str) -> str:
+    lowered = query.lower()
+    if "card" in lowered:
+        return "card_magic"
+    if any(term in lowered for term in ("street", "audience reaction", "street magic")):
+        return "street_reactions"
+    if any(term in lowered for term in ("mind reading", "mentalism", "prediction", "thought")):
+        return "mind_reading"
+    if any(term in lowered for term in ("illusion", "disappear", "floating", "appear")):
+        return "illusions"
+    if any(term in lowered for term in ("coin", "everyday object", "phone", "ring", "money")):
+        return "everyday_objects"
+    if "reveal" in lowered:
+        return "reveals"
+    if any(term in lowered for term in ("funny", "fail", "prank")):
+        return "funny"
+    return "sleight_of_hand"
+
+
+def _magic_theme_search_queries(query: str) -> list[str]:
+    theme = _magic_theme(query)
+    return [query, *MAGIC_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -1689,6 +1802,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _satisfying_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "magic":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _magic_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -2103,6 +2221,50 @@ def _satisfying_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _magic_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & MAGIC_CORE_TERMS
+    payoff_matches = tokens & MAGIC_PAYOFF_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & MAGIC_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & MAGIC_CORE_TERMS
+    title_payoff_matches = title_tokens & MAGIC_PAYOFF_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.38, 0.2 + len(core_matches) * 0.04)
+    if payoff_matches:
+        score += min(0.32, 0.12 + len(payoff_matches) * 0.045)
+    if query_matches:
+        score += min(0.2, len(query_matches) * 0.04)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.3
+    if not payoff_matches:
+        score -= 0.14
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.28
+    if not title_payoff_matches:
+        score -= 0.08
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -2124,6 +2286,8 @@ def _domain_relevance_score(
         return _unexpected_relevance_score(video, query)
     if settings and settings.content_domain == "satisfying":
         return _satisfying_relevance_score(video, query)
+    if settings and settings.content_domain == "magic":
+        return _magic_relevance_score(video, query)
     return 0.75
 
 
@@ -2136,6 +2300,7 @@ def _domain_relevance_threshold(settings: Settings | None) -> float | None:
         "formula1",
         "unexpected",
         "satisfying",
+        "magic",
     }:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
@@ -2280,6 +2445,7 @@ class CompilationQueryProvider:
             "formula1",
             "unexpected",
             "satisfying",
+            "magic",
         }
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
@@ -2383,6 +2549,11 @@ def _satisfying_query_combinations(settings: Settings) -> list[str]:
     return [_ensure_shorts_query(query) for query in pillars]
 
 
+def _magic_query_combinations(settings: Settings) -> list[str]:
+    pillars = _settings_csv(settings.magic_query_pillars)
+    return [_ensure_shorts_query(query) for query in pillars]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
@@ -2410,6 +2581,10 @@ def _compilation_queries(settings: Settings) -> list[str]:
         queries = [*generated, *configured]
     elif settings.content_domain == "satisfying":
         generated = _satisfying_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "magic":
+        generated = _magic_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -2616,6 +2791,7 @@ class YouTubeDataProvider:
                 "formula1",
                 "unexpected",
                 "satisfying",
+                "magic",
             }
             else pool_size
         )
@@ -2633,6 +2809,7 @@ class YouTubeDataProvider:
                 "formula1",
                 "unexpected",
                 "satisfying",
+                "magic",
             }
         )
         if focused_domain:
@@ -2702,6 +2879,7 @@ class YouTubeDataProvider:
                         "formula1",
                         "unexpected",
                         "satisfying",
+                        "magic",
                     }
                     and len(videos) >= pool_size
                 ):
@@ -2719,6 +2897,7 @@ class YouTubeDataProvider:
                     "formula1",
                     "unexpected",
                     "satisfying",
+                    "magic",
                 }
                 and len(videos) >= pool_size
             ):
@@ -3763,6 +3942,7 @@ def build_providers(
             "formula1",
             "unexpected",
             "satisfying",
+            "magic",
             "compilation",
         }
         else YouTubeTrendProvider(settings, youtube_client)
