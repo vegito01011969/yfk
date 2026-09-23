@@ -1295,6 +1295,27 @@ def _redact_api_key(text: str) -> str:
     return re.sub(r"([?&]key=)[^&\s]+", r"\1[redacted]", text)
 
 
+def _youtube_api_error_detail(response: requests.Response | None) -> str | None:
+    if response is None:
+        return None
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return None
+    reason = None
+    errors = error.get("errors")
+    if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+        reason = errors[0].get("reason")
+    message = error.get("message")
+    details = [str(value) for value in (reason, message) if value]
+    return "; ".join(details) if details else None
+
+
 class TrendProvider(Protocol):
     def discover(self, limit: int) -> list[Trend]: ...
 
@@ -1333,13 +1354,15 @@ class YouTubeApiClient:
             )
             response.raise_for_status()
         except requests.RequestException as exc:
+            error_response = exc.response if isinstance(exc, requests.HTTPError) else None
             status_code = (
-                exc.response.status_code
-                if isinstance(exc, requests.HTTPError) and exc.response is not None
-                else None
+                error_response.status_code if error_response is not None else None
             )
+            detail = _youtube_api_error_detail(error_response)
+            detail_suffix = f" ({_redact_api_key(detail)})" if detail else ""
             raise YouTubeApiError(
-                f"YouTube API request failed for {endpoint}: {_redact_api_key(str(exc))}",
+                f"YouTube API request failed for {endpoint}{detail_suffix}: "
+                f"{_redact_api_key(str(exc))}",
                 status_code=status_code,
             ) from None
         payload = response.json()

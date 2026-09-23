@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+import requests
+
 from viral_pipeline.config import Settings
 from viral_pipeline.domain import Trend, YouTubeVideo
 from viral_pipeline.providers import (
     CompilationQueryProvider,
+    YouTubeApiClient,
     YouTubeApiError,
     YouTubeDataProvider,
     YouTubeTrendProvider,
@@ -1068,6 +1071,42 @@ def test_youtube_short_search_returns_empty_on_quota_limited_focused_domain(
     )
 
     assert videos == []
+
+
+def test_youtube_api_error_includes_safe_google_reason() -> None:
+    class ErrorResponse:
+        status_code = 429
+
+        def raise_for_status(self) -> None:
+            raise requests.HTTPError(
+                "429 Client Error: Too Many Requests for url: "
+                "https://www.googleapis.com/youtube/v3/search?key=secret-key",
+                response=self,
+            )
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "error": {
+                    "message": "Rate limit exceeded",
+                    "errors": [{"reason": "rateLimitExceeded"}],
+                }
+            }
+
+    class ErrorSession:
+        def get(self, *args: Any, **kwargs: Any) -> ErrorResponse:
+            return ErrorResponse()
+
+    client = YouTubeApiClient("secret-key", session=ErrorSession())  # type: ignore[arg-type]
+
+    try:
+        client.search_videos(query="test", max_results=1)
+    except YouTubeApiError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected YouTubeApiError")
+
+    assert "rateLimitExceeded" in message
+    assert "secret-key" not in message
 
 
 def test_youtube_trend_provider_filters_generic_media_terms() -> None:
