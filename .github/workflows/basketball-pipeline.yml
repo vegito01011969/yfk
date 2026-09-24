@@ -47,7 +47,7 @@ jobs:
       YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID: ${{ secrets.BASKETBALL_YOUTUBE_CHANNEL_ID }}
       YOUTUBE_VIDEO_MADE_FOR_KIDS: "false"
       YOUTUBE_VIDEO_SELF_DECLARED_MADE_FOR_KIDS: "false"
-      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      YOUTUBE_API_KEY: ${{ secrets.BASKETBALL_YOUTUBE_API_KEY }}
       GROQCLOUD_API_KEY: ${{ secrets.GROQCLOUD_API_KEY }}
       YOUTUBE_OAUTH_CLIENT_SECRETS: secrets/youtube_client_secret.json
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
