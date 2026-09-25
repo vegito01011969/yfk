@@ -90,8 +90,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install -e ".[media,ai]"
-          python -m pip install "google-colab-cli"
-          python -m pip install "jupyter-kernel-client @ git+https://github.com/googlecolab/jupyter-kernel-client.git@f18e982c3265df5e923aa9def101ab3fd737e139"
+          python -m pip install "google-colab-cli==0.6.0"
+          python -m pip install --no-deps --force-reinstall "jupyter-kernel-client @ git+https://github.com/googlecolab/jupyter-kernel-client.git@f18e982c3265df5e923aa9def101ab3fd737e139"
+          python -c "import jupyter_kernel_client as client; assert hasattr(client, 'JupyterSubprotocol')"
           python -m pip show yt-dlp yt-dlp-ejs google-colab-cli
           colab version
 
