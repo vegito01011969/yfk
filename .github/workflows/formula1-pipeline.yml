@@ -3,7 +3,7 @@ name: scheduled-formula1-shorts-pipeline
 on:
   workflow_dispatch:
   schedule:
-    - cron: "50 0,2,4,6,8,10,12,14,16,18,20,22 * * *"
+    - cron: "5 2,6,10,14,18,22 * * *"
 
 concurrency:
   group: formula1-youtube-shorts-pipeline
