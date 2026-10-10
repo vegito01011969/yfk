@@ -250,28 +250,33 @@ SATISFYING_EVENT_KEYWORDS = (
     "kinetic sand,slime,mesmerizing,smooth"
 )
 
-MAGIC_ACTIVITY_SEED_QUERIES = (
-    "card magic tricks,street magic reactions,mind reading magic,impossible illusions,"
-    "coin magic,everyday object magic,magic reveals,funny magic fails,sleight of hand"
+WWE_ACTIVITY_SEED_QUERIES = (
+    "viral wwe moments,wwe shorts,wwe challenge,wwe compilation,viral wwe trend,"
+    "wwe finishers,wwe returns,wwe entrances,wwe championship wins"
 )
 
-MAGIC_COMPILATION_QUERIES = (
-    "impossible card magic shorts,street magic reactions shorts,mind reading magic shorts,"
-    "impossible illusions shorts,coin magic tricks shorts,best magic reveals shorts,"
-    "funny magic fails shorts,sleight of hand shorts"
+WWE_COMPILATION_QUERIES = (
+    "unreal wwe finishers shorts,epic wwe returns shorts,"
+    "unforgettable wwe moments shorts,insane wwe moves shorts,"
+    "best wwe entrances shorts,impossible wwe eliminations shorts"
 )
 
-MAGIC_QUERY_PILLARS = (
-    "card magic,street magic reactions,mind reading and predictions,"
-    "impossible illusions,coin and everyday object magic,best magic reveals,"
-    "funny magic moments,sleight of hand"
+WWE_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
 )
 
-MAGIC_EVENT_KEYWORDS = (
-    "magic,magician,card trick,card magic,street magic,mind reading,mentalism,"
-    "prediction,illusion,disappear,appearing,levitation,floating,coin magic,"
-    "ring magic,money magic,reveal,reaction,sleight of hand,close up magic,"
-    "magic fail,magic prank,impossible trick"
+WWE_QUERY_TYPES = (
+    "wwe finishers,wwe returns,wwe moments,wwe moves,wwe entrances,wwe spears,"
+    "wwe rkos,wwe submissions,wwe championship wins,wwe eliminations,wwe ladder matches,"
+    "wwe tag team moves,wwe promo moments,wwe surprise debuts"
+)
+
+WWE_EVENT_KEYWORDS = (
+    "wwe,wrestling,wrestler,wrestlers,ring,finisher,finishers,spear,rko,slam,slams,"
+    "suplex,suplexes,submission,submissions,championship,champion,title belt,entrance,"
+    "return,returns,debut,elimination,ladder match,tag team,promo,match,matches,"
+    "crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
 
@@ -341,7 +346,8 @@ class Settings(BaseSettings):
     volleyball_query_adjectives: str = VOLLEYBALL_QUERY_ADJECTIVES
     volleyball_query_types: str = VOLLEYBALL_QUERY_TYPES
     satisfying_query_pillars: str = SATISFYING_QUERY_PILLARS
-    magic_query_pillars: str = MAGIC_QUERY_PILLARS
+    wwe_query_adjectives: str = WWE_QUERY_ADJECTIVES
+    wwe_query_types: str = WWE_QUERY_TYPES
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -464,17 +470,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = SATISFYING_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = SATISFYING_EVENT_KEYWORDS
-        elif self.content_domain == "magic":
+        elif self.content_domain == "wwe":
             if not self.content_label:
-                self.content_label = "Magic Moments"
+                self.content_label = "WWE Moments"
             if not self.source_languages:
                 self.source_languages = "en"
             if not self.youtube_activity_seed_queries:
-                self.youtube_activity_seed_queries = MAGIC_ACTIVITY_SEED_QUERIES
+                self.youtube_activity_seed_queries = WWE_ACTIVITY_SEED_QUERIES
             if not self.compilation_queries:
-                self.compilation_queries = MAGIC_COMPILATION_QUERIES
+                self.compilation_queries = WWE_COMPILATION_QUERIES
             if not self.event_keywords:
-                self.event_keywords = MAGIC_EVENT_KEYWORDS
+                self.event_keywords = WWE_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"

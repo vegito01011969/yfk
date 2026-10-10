@@ -1519,7 +1519,7 @@ def _require_expected_upload_channel_for_domain(settings: Settings) -> None:
         "formula1",
         "volleyball",
         "satisfying",
-        "magic",
+        "wwe",
     }
     if (
         settings.content_domain in guarded_domains

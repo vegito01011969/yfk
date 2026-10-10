@@ -1,4 +1,4 @@
-name: scheduled-magic-shorts-pipeline
+name: scheduled-wwe-shorts-pipeline
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     - cron: "20 3,7,11,15,19,23 * * *"
 
 concurrency:
-  group: magic-youtube-shorts-pipeline
+  group: wwe-youtube-shorts-pipeline
   cancel-in-progress: false
 
 jobs:
@@ -19,11 +19,11 @@ jobs:
 
     env:
       CI: "true"
-      CONTENT_DOMAIN: magic
-      CONTENT_LABEL: Magic Moments
+      CONTENT_DOMAIN: wwe
+      CONTENT_LABEL: WWE Moments
       SOURCE_LANGUAGE_MODE: cycle
       SOURCE_LANGUAGES: en
-      SOURCE_HISTORY_PATH: data/magic_source_video_history.json
+      SOURCE_HISTORY_PATH: data/wwe_source_video_history.json
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
       MAX_VIDEOS_PER_TREND: "40"
@@ -102,15 +102,15 @@ jobs:
       - name: Prepare runtime directories
         run: mkdir -p data workdir/runs secrets
 
-      - name: Restore Magic pipeline state
+      - name: Restore WWE pipeline state
         uses: actions/cache/restore@v4
         with:
-          path: data/magic_source_video_history.json
-          key: magic-pipeline-state-v1-${{ github.run_id }}
+          path: data/wwe_source_video_history.json
+          key: wwe-pipeline-state-v1-${{ github.run_id }}
           restore-keys: |
-            magic-pipeline-state-v1-
+            wwe-pipeline-state-v1-
 
-      - name: Materialize Magic YouTube auth files
+      - name: Materialize WWE YouTube auth files
         env:
           YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.MAGIC_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
           YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.MAGIC_YOUTUBE_OAUTH_TOKEN_JSON }}
@@ -173,22 +173,22 @@ jobs:
       - name: Validate YouTube upload auth
         run: viral-pipeline auth-youtube-upload
 
-      - name: Run Magic pipeline
+      - name: Run WWE pipeline
         run: python scripts/run_pipeline_until_upload.py
 
-      - name: Summarize Magic pipeline run
+      - name: Summarize WWE pipeline run
         if: always()
         env:
-          PIPELINE_SUMMARY_LABEL: FlawedMagic Shorts Pipeline
+          PIPELINE_SUMMARY_LABEL: FlawedWWE Shorts Pipeline
         run: python scripts/summarize_pipeline_run.py
 
-      - name: Upload Magic pipeline diagnostics
+      - name: Upload WWE pipeline diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: magic-pipeline-diagnostics-${{ github.run_id }}
+          name: wwe-pipeline-diagnostics-${{ github.run_id }}
           path: |
-            data/magic_source_video_history.json
+            data/wwe_source_video_history.json
             workdir/runs/**/context.json
             workdir/runs/**/publish/publish_manifest.json
             workdir/runs/**/upload/youtube_upload.json
@@ -197,13 +197,13 @@ jobs:
             workdir/runs/**/downloads/result.json
           retention-days: 3
 
-      - name: Cleanup bulky Magic pipeline state
+      - name: Cleanup bulky WWE pipeline state
         if: always()
         run: python scripts/cleanup_pipeline_state.py
 
-      - name: Save updated Magic pipeline state
+      - name: Save updated WWE pipeline state
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: data/magic_source_video_history.json
-          key: magic-pipeline-state-v1-${{ github.run_id }}
+          path: data/wwe_source_video_history.json
+          key: wwe-pipeline-state-v1-${{ github.run_id }}

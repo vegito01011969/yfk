@@ -504,92 +504,128 @@ SATISFYING_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
-MAGIC_CORE_TERMS = {
-    "card",
-    "cards",
-    "illusion",
-    "magic",
-    "magician",
-    "mentalism",
-    "prediction",
-    "reveal",
-    "sleight",
-    "street",
-    "trick",
-    "tricks",
+WWE_CORE_TERMS = {
+    "champion",
+    "championship",
+    "debut",
+    "elimination",
+    "entrance",
+    "finisher",
+    "finishers",
+    "ladder",
+    "match",
+    "matches",
+    "promo",
+    "return",
+    "returns",
+    "ring",
+    "rko",
+    "slam",
+    "slams",
+    "spear",
+    "submission",
+    "submissions",
+    "suplex",
+    "suplexes",
+    "title",
+    "wwe",
+    "wrestler",
+    "wrestling",
 }
 
-MAGIC_PAYOFF_TERMS = {
-    "appear",
-    "card",
-    "coin",
-    "disappear",
-    "floating",
+WWE_MOMENT_TERMS = {
+    "amazing",
+    "best",
+    "crazy",
+    "dramatic",
+    "epic",
     "impossible",
-    "illusion",
-    "mind",
-    "prediction",
-    "reaction",
-    "reveal",
-    "sleight",
-    "transform",
-    "vanish",
+    "incredible",
+    "insane",
+    "last",
+    "legendary",
+    "moment",
+    "moments",
+    "shocking",
+    "surprise",
+    "unbelievable",
+    "unforgettable",
+    "unreal",
+    "viral",
 }
 
-MAGIC_EXCLUDED_TERMS = {
+WWE_EXCLUDED_TERMS = {
+    "2k",
+    "aew",
     "animation",
     "cartoon",
-    "explained",
-    "game",
+    "edit",
+    "edits",
     "gameplay",
-    "movie",
-    "music",
+    "gaming",
+    "interview",
+    "lesson",
+    "lyrics",
+    "minecraft",
+    "news",
     "podcast",
+    "reaction",
+    "roblox",
     "song",
+    "talk",
+    "talks",
     "trailer",
     "tutorial",
 }
 
-MAGIC_THEME_QUERIES: dict[str, list[str]] = {
-    "card_magic": [
-        "impossible card magic tricks shorts",
-        "card trick sleight of hand shorts",
-        "card magic predictions shorts",
+WWE_THEME_QUERIES: dict[str, list[str]] = {
+    "finishers": [
+        "unreal wwe finishers shorts",
+        "insane wwe finishing moves shorts",
+        "best wwe finishers shorts",
+        "impossible wwe finisher moments shorts",
     ],
-    "street_reactions": [
-        "unbelievable street magic reactions shorts",
-        "street magician audience reactions shorts",
-        "crazy street magic shorts",
+    "returns": [
+        "epic wwe returns shorts",
+        "shocking wwe surprise returns shorts",
+        "best wwe comeback returns shorts",
+        "unforgettable wwe returns shorts",
     ],
-    "mind_reading": [
-        "mind reading magic predictions shorts",
-        "mentalism impossible guesses shorts",
-        "thought reading magic shorts",
+    "entrances": [
+        "best wwe entrances shorts",
+        "epic wwe superstar entrances shorts",
+        "unforgettable wwe entrance reactions shorts",
+        "insane wwe entrances shorts",
     ],
-    "illusions": [
-        "impossible magic illusions shorts",
-        "objects disappear magic shorts",
-        "floating magic illusion shorts",
+    "moves": [
+        "insane wwe moves shorts",
+        "best wwe spear shorts",
+        "unreal wwe rko shorts",
+        "impossible wwe suplex shorts",
     ],
-    "everyday_objects": [
-        "coin and everyday object magic shorts",
-        "phone ring money magic tricks shorts",
-        "impossible coin magic shorts",
+    "submissions": [
+        "best wwe submissions shorts",
+        "insane wwe submission moves shorts",
+        "epic wwe tap out moments shorts",
+        "unbelievable wwe submissions shorts",
     ],
-    "reveals": [
-        "best magic reveals shorts",
-        "impossible magic final reveal shorts",
-        "magic reveal reactions shorts",
+    "championships": [
+        "unforgettable wwe championship wins shorts",
+        "epic wwe title wins shorts",
+        "shocking wwe champion moments shorts",
+        "best wwe title belt moments shorts",
     ],
-    "funny": [
-        "funny magic fails shorts",
-        "funny magician moments shorts",
-        "unexpected magic reactions shorts",
+    "eliminations": [
+        "insane wwe eliminations shorts",
+        "best wwe royal rumble eliminations shorts",
+        "epic wwe ladder match moments shorts",
+        "unbelievable wwe elimination moments shorts",
     ],
-    "sleight_of_hand": [
-        "insane sleight of hand shorts",
-        "close up magic fast hands shorts",
-        "impossible hand magic tricks shorts",
+    "moments": [
+        "unforgettable wwe moments shorts",
+        "shocking wwe moments shorts",
+        "wwe moments that shocked everyone shorts",
+        "crazy wwe moments shorts",
     ],
 }
 
@@ -1578,6 +1614,12 @@ def _ensure_volleyball_query(query: str) -> str:
     return f"volleyball {query}"
 
 
+def _ensure_wwe_query(query: str) -> str:
+    if "wwe" in query.lower():
+        return query
+    return f"wwe {query}"
+
+
 def _domain_search_query(query: str, settings: Settings | None) -> str:
     if settings and settings.content_domain == "football":
         return _ensure_football_query(query)
@@ -1591,6 +1633,8 @@ def _domain_search_query(query: str, settings: Settings | None) -> str:
         return _ensure_formula1_query(query)
     if settings and settings.content_domain == "volleyball":
         return _ensure_volleyball_query(query)
+    if settings and settings.content_domain == "wwe":
+        return _ensure_wwe_query(query)
     return query
 
 
@@ -1780,28 +1824,28 @@ def _satisfying_theme_search_queries(query: str) -> list[str]:
     return [query, *SATISFYING_THEME_QUERIES[theme]]
 
 
-def _magic_theme(query: str) -> str:
+def _wwe_theme(query: str) -> str:
     lowered = query.lower()
-    if "card" in lowered:
-        return "card_magic"
-    if any(term in lowered for term in ("street", "audience reaction", "street magic")):
-        return "street_reactions"
-    if any(term in lowered for term in ("mind reading", "mentalism", "prediction", "thought")):
-        return "mind_reading"
-    if any(term in lowered for term in ("illusion", "disappear", "floating", "appear")):
-        return "illusions"
-    if any(term in lowered for term in ("coin", "everyday object", "phone", "ring", "money")):
-        return "everyday_objects"
-    if "reveal" in lowered:
-        return "reveals"
-    if any(term in lowered for term in ("funny", "fail", "prank")):
-        return "funny"
-    return "sleight_of_hand"
+    if any(term in lowered for term in ("finisher", "finishers", "finishing move")):
+        return "finishers"
+    if any(term in lowered for term in ("return", "returns", "comeback", "debut")):
+        return "returns"
+    if any(term in lowered for term in ("entrance", "entrances", "superstar entrance")):
+        return "entrances"
+    if any(term in lowered for term in ("spear", "rko", "suplex", "slam", "moves")):
+        return "moves"
+    if any(term in lowered for term in ("submission", "submissions", "tap out")):
+        return "submissions"
+    if any(term in lowered for term in ("championship", "champion", "title win", "title belt")):
+        return "championships"
+    if any(term in lowered for term in ("elimination", "eliminations", "rumble", "ladder")):
+        return "eliminations"
+    return "moments"
 
 
-def _magic_theme_search_queries(query: str) -> list[str]:
-    theme = _magic_theme(query)
-    return [query, *MAGIC_THEME_QUERIES[theme]]
+def _wwe_theme_search_queries(query: str) -> list[str]:
+    theme = _wwe_theme(query)
+    return [query, *WWE_THEME_QUERIES[theme]]
 
 
 def _shorts_search_queries(
@@ -1863,10 +1907,10 @@ def _shorts_search_queries(
             _append_language_to_query(theme_query, language)
             for theme_query in _satisfying_theme_search_queries(query)
         ]
-    if settings and settings.content_domain == "magic":
+    if settings and settings.content_domain == "wwe":
         queries = [
             _append_language_to_query(theme_query, language)
-            for theme_query in _magic_theme_search_queries(query)
+            for theme_query in _wwe_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -2281,25 +2325,25 @@ def _satisfying_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
-def _magic_relevance_score(video: YouTubeVideo, query: str) -> float:
+def _wwe_relevance_score(video: YouTubeVideo, query: str) -> float:
     text = _video_search_text(video)
     tokens = set(re.findall(r"[a-z0-9]+", text))
     query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
     query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
     comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
-    core_matches = tokens & MAGIC_CORE_TERMS
-    payoff_matches = tokens & MAGIC_PAYOFF_TERMS
+    core_matches = tokens & WWE_CORE_TERMS
+    moment_matches = tokens & WWE_MOMENT_TERMS
     query_matches = comparable_tokens & query_tokens
-    excluded_matches = tokens & MAGIC_EXCLUDED_TERMS
+    excluded_matches = tokens & WWE_EXCLUDED_TERMS
     title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
-    title_core_matches = title_tokens & MAGIC_CORE_TERMS
-    title_payoff_matches = title_tokens & MAGIC_PAYOFF_TERMS
+    title_core_matches = title_tokens & WWE_CORE_TERMS
+    title_moment_matches = title_tokens & WWE_MOMENT_TERMS
 
     score = 0.0
     if core_matches:
         score += min(0.38, 0.2 + len(core_matches) * 0.04)
-    if payoff_matches:
-        score += min(0.32, 0.12 + len(payoff_matches) * 0.045)
+    if moment_matches:
+        score += min(0.34, 0.14 + len(moment_matches) * 0.04)
     if query_matches:
         score += min(0.2, len(query_matches) * 0.04)
     if video.view_count:
@@ -2313,13 +2357,13 @@ def _magic_relevance_score(video: YouTubeVideo, query: str) -> float:
         score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
     if not core_matches:
         score -= 0.3
-    if not payoff_matches:
-        score -= 0.14
+    if not moment_matches:
+        score -= 0.12
     if excluded_matches & title_tokens:
         score -= 0.2
     if not title_core_matches:
         score -= 0.28
-    if not title_payoff_matches:
+    if not title_moment_matches:
         score -= 0.08
 
     return round(max(0.0, min(1.0, score)), 4)
@@ -2346,8 +2390,8 @@ def _domain_relevance_score(
         return _volleyball_relevance_score(video, query)
     if settings and settings.content_domain == "satisfying":
         return _satisfying_relevance_score(video, query)
-    if settings and settings.content_domain == "magic":
-        return _magic_relevance_score(video, query)
+    if settings and settings.content_domain == "wwe":
+        return _wwe_relevance_score(video, query)
     return 0.75
 
 
@@ -2360,7 +2404,7 @@ def _domain_relevance_threshold(settings: Settings | None) -> float | None:
         "formula1",
         "volleyball",
         "satisfying",
-        "magic",
+        "wwe",
     }:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
@@ -2505,7 +2549,7 @@ class CompilationQueryProvider:
             "formula1",
             "volleyball",
             "satisfying",
-            "magic",
+            "wwe",
         }
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
@@ -2614,9 +2658,14 @@ def _satisfying_query_combinations(settings: Settings) -> list[str]:
     return [_ensure_shorts_query(query) for query in pillars]
 
 
-def _magic_query_combinations(settings: Settings) -> list[str]:
-    pillars = _settings_csv(settings.magic_query_pillars)
-    return [_ensure_shorts_query(query) for query in pillars]
+def _wwe_query_combinations(settings: Settings) -> list[str]:
+    adjectives = _settings_csv(settings.wwe_query_adjectives)
+    types = _settings_csv(settings.wwe_query_types)
+    return [
+        _ensure_shorts_query(_ensure_wwe_query(f"{adjective} {query_type}"))
+        for query_type in types
+        for adjective in adjectives
+    ]
 
 
 def _compilation_queries(settings: Settings) -> list[str]:
@@ -2648,8 +2697,8 @@ def _compilation_queries(settings: Settings) -> list[str]:
         generated = _satisfying_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
-    elif settings.content_domain == "magic":
-        generated = _magic_query_combinations(settings)
+    elif settings.content_domain == "wwe":
+        generated = _wwe_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:
@@ -2856,7 +2905,7 @@ class YouTubeDataProvider:
                 "formula1",
                 "volleyball",
                 "satisfying",
-                "magic",
+                "wwe",
             }
             else pool_size
         )
@@ -2874,7 +2923,7 @@ class YouTubeDataProvider:
                 "formula1",
                 "volleyball",
                 "satisfying",
-                "magic",
+                "wwe",
             }
         )
         if focused_domain:
@@ -2944,7 +2993,7 @@ class YouTubeDataProvider:
                         "formula1",
                         "volleyball",
                         "satisfying",
-                        "magic",
+                        "wwe",
                     }
                     and len(videos) >= pool_size
                 ):
@@ -2962,7 +3011,7 @@ class YouTubeDataProvider:
                     "formula1",
                     "volleyball",
                     "satisfying",
-                    "magic",
+                    "wwe",
                 }
                 and len(videos) >= pool_size
             ):
@@ -4007,7 +4056,7 @@ def build_providers(
             "formula1",
             "volleyball",
             "satisfying",
-            "magic",
+            "wwe",
             "compilation",
         }
         else YouTubeTrendProvider(settings, youtube_client)
