@@ -221,33 +221,28 @@ VOLLEYBALL_EVENT_KEYWORDS = (
     "comeback,team,court,crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
-SATISFYING_ACTIVITY_SEED_QUERIES = (
-    "oddly satisfying moments,cleaning transformations,perfect precision work,"
-    "restoration process,mesmerizing machines,satisfying art process,"
-    "before and after transformations,perfect fit moments,kinetic sand crushing"
+INAPPROPRIATE_ACTIVITY_SEED_QUERIES = (
+    "out of pocket funny moments,awkward funny interactions,savage comebacks,"
+    "embarrassing funny moments,funny double entendre jokes,unfiltered funny comments,"
+    "cringe social moments,awkward reactions"
 )
 
-SATISFYING_COMPILATION_QUERIES = (
-    "oddly satisfying moments shorts,cleaning transformations shorts,"
-    "perfectly cut things shorts,restoration process shorts,"
-    "machines working perfectly shorts,satisfying art process shorts,"
-    "before and after transformations shorts,perfect precision fits shorts,"
-    "kinetic sand slime crushing shorts,try not to feel satisfied shorts"
+INAPPROPRIATE_COMPILATION_QUERIES = (
+    "out of pocket funny comments shorts,awkward funny interactions shorts,"
+    "savage comebacks shorts,embarrassing funny moments shorts,"
+    "funny double entendre jokes shorts,unfiltered funny reactions shorts"
 )
 
-SATISFYING_QUERY_PILLARS = (
-    "oddly satisfying moments,cleaning transformations,perfectly cut things,"
-    "restoration videos,perfect machines and processes,smooth art and craft,"
-    "before and after transformations,perfect fits and precision,"
-    "sand slime and crushing,try not to feel satisfied"
+INAPPROPRIATE_QUERY_PILLARS = (
+    "out of pocket funny comments,awkward funny interactions,savage comebacks,"
+    "embarrassing funny moments,double entendre jokes,unfiltered funny comments,"
+    "cringe social moments,awkward funny reactions"
 )
 
-SATISFYING_EVENT_KEYWORDS = (
-    "satisfying,oddly satisfying,cleaning,clean,pressure washing,carpet cleaning,"
-    "restoration,restore,precision,perfect fit,align,organize,cutting,slicing,"
-    "crushing,machine,manufacturing,process,packaging,painting,woodworking,"
-    "pottery,resin,carving,sculpting,before and after,transformation,"
-    "kinetic sand,slime,mesmerizing,smooth"
+INAPPROPRIATE_EVENT_KEYWORDS = (
+    "out of pocket,awkward,funny,comeback,comebacks,savage,embarrassing,"
+    "double entendre,unfiltered,comment,comments,reaction,reactions,cringe,"
+    "joke,jokes,said,says,conversation,interaction,unexpected,chaos"
 )
 
 WWE_ACTIVITY_SEED_QUERIES = (
@@ -324,6 +319,7 @@ class Settings(BaseSettings):
     youtube_video_made_for_kids: bool = False
     youtube_video_self_declared_made_for_kids: bool = False
     youtube_region_code: str = "US"
+    youtube_safe_search: str = "moderate"
     youtube_trend_category_id: str | None = None
     youtube_trend_source_video_count: int = 50
     youtube_trend_probe_results: int = 5
@@ -345,7 +341,7 @@ class Settings(BaseSettings):
     formula1_query_types: str = FORMULA1_QUERY_TYPES
     volleyball_query_adjectives: str = VOLLEYBALL_QUERY_ADJECTIVES
     volleyball_query_types: str = VOLLEYBALL_QUERY_TYPES
-    satisfying_query_pillars: str = SATISFYING_QUERY_PILLARS
+    inappropriate_query_pillars: str = INAPPROPRIATE_QUERY_PILLARS
     wwe_query_adjectives: str = WWE_QUERY_ADJECTIVES
     wwe_query_types: str = WWE_QUERY_TYPES
     event_keywords: str = ""
@@ -459,17 +455,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = VOLLEYBALL_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = VOLLEYBALL_EVENT_KEYWORDS
-        elif self.content_domain == "satisfying":
+        elif self.content_domain == "inappropriate":
             if not self.content_label:
-                self.content_label = "Satisfying Moments"
+                self.content_label = "Inappropriate Moments"
             if not self.source_languages:
                 self.source_languages = "en"
             if not self.youtube_activity_seed_queries:
-                self.youtube_activity_seed_queries = SATISFYING_ACTIVITY_SEED_QUERIES
+                self.youtube_activity_seed_queries = INAPPROPRIATE_ACTIVITY_SEED_QUERIES
             if not self.compilation_queries:
-                self.compilation_queries = SATISFYING_COMPILATION_QUERIES
+                self.compilation_queries = INAPPROPRIATE_COMPILATION_QUERIES
             if not self.event_keywords:
-                self.event_keywords = SATISFYING_EVENT_KEYWORDS
+                self.event_keywords = INAPPROPRIATE_EVENT_KEYWORDS
         elif self.content_domain == "wwe":
             if not self.content_label:
                 self.content_label = "WWE Moments"

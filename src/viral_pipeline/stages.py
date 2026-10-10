@@ -1518,7 +1518,7 @@ def _require_expected_upload_channel_for_domain(settings: Settings) -> None:
         "tennis",
         "formula1",
         "volleyball",
-        "satisfying",
+        "inappropriate",
         "wwe",
     }
     if (

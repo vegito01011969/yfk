@@ -524,7 +524,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
     tennis = Settings(_env_file=None, content_domain="tennis")
     formula1 = Settings(_env_file=None, content_domain="formula1")
     volleyball = Settings(_env_file=None, content_domain="volleyball")
-    satisfying = Settings(_env_file=None, content_domain="satisfying")
+    inappropriate = Settings(_env_file=None, content_domain="inappropriate")
     wwe = Settings(_env_file=None, content_domain="wwe")
 
     assert kids.content_label == "Funny Kid Clips"
@@ -561,9 +561,9 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert volleyball.volleyball_query_adjectives.split(",")[0] == "unreal"
     assert volleyball.volleyball_query_types.split(",")[0] == "volleyball spikes"
 
-    assert satisfying.content_label == "Satisfying Moments"
-    assert satisfying.source_languages == "en"
-    assert satisfying.satisfying_query_pillars.split(",")[0] == "oddly satisfying moments"
+    assert inappropriate.content_label == "Inappropriate Moments"
+    assert inappropriate.source_languages == "en"
+    assert inappropriate.inappropriate_query_pillars.split(",")[0] == "out of pocket funny comments"
 
     assert wwe.content_label == "WWE Moments"
     assert wwe.source_languages == "en"
@@ -846,41 +846,41 @@ def test_volleyball_relevance_rejects_gameplay() -> None:
     assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
 
 
-def test_satisfying_short_queries_stay_inside_selected_pillar() -> None:
-    settings = Settings(_env_file=None, content_domain="satisfying")
+def test_inappropriate_short_queries_stay_inside_selected_pillar() -> None:
+    settings = Settings(_env_file=None, content_domain="inappropriate")
 
-    queries = _shorts_search_queries("cleaning transformations shorts", "en", settings)
+    queries = _shorts_search_queries("savage comebacks shorts", "en", settings)
 
     assert queries
     assert all(
-        any(term in query.lower() for term in ("clean", "pressure washing", "carpet"))
+        any(term in query.lower() for term in ("savage", "comeback", "reply", "replies"))
         for query in queries
     )
-    assert not any("kinetic sand" in query.lower() for query in queries)
+    assert not any("double entendre" in query.lower() for query in queries)
 
 
-def test_satisfying_relevance_rejects_gameplay() -> None:
-    settings = Settings(_env_file=None, content_domain="satisfying")
+def test_inappropriate_relevance_rejects_explicit_content() -> None:
+    settings = Settings(_env_file=None, content_domain="inappropriate")
     real_moment = YouTubeVideo(
-        id="restoration",
+        id="comeback",
         trend_id="trend-1",
-        title="Satisfying restoration transformation #shorts",
-        url="https://www.youtube.com/watch?v=restoration",
-        channel_title="FlawedSatisfying",
+        title="Savage comeback during an awkward funny conversation #shorts",
+        url="https://www.youtube.com/watch?v=comeback",
+        channel_title="FlawedInappropriate",
         view_count=1_000_000,
         like_count=100_000,
-        metadata={"tags": ["satisfying", "restoration", "before and after"]},
+        metadata={"tags": ["savage", "comeback", "awkward", "funny"]},
     )
-    gameplay = real_moment.model_copy(
+    explicit = real_moment.model_copy(
         update={
-            "id": "gameplay",
-            "title": "Satisfying restoration gameplay tutorial #shorts",
-            "metadata": {"tags": ["gameplay", "tutorial", "restoration"]},
+            "id": "explicit",
+            "title": "Explicit adult comedy clip #shorts",
+            "metadata": {"tags": ["explicit", "adult", "sexual"]},
         }
     )
 
     assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
-    assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
+    assert _domain_relevance_score(settings, explicit, explicit.title) < 0.55
 
 
 def test_wwe_short_queries_stay_inside_selected_theme() -> None:

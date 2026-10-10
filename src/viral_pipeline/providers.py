@@ -399,108 +399,105 @@ VOLLEYBALL_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
-SATISFYING_CORE_TERMS = {
-    "after",
-    "before",
-    "clean",
-    "cleaning",
-    "crushing",
-    "cutting",
-    "machine",
-    "machines",
-    "perfect",
-    "precision",
-    "process",
-    "restoration",
-    "restore",
-    "satisfying",
-    "slime",
-    "smooth",
-    "transformation",
+INAPPROPRIATE_CORE_TERMS = {
+    "awkward",
+    "comment",
+    "comments",
+    "comeback",
+    "comebacks",
+    "cringe",
+    "double",
+    "embarrassing",
+    "funny",
+    "inappropriate",
+    "joke",
+    "jokes",
+    "out",
+    "pocket",
+    "savage",
+    "unfiltered",
 }
 
-SATISFYING_PAYOFF_TERMS = {
-    "align",
-    "art",
-    "clean",
-    "crushing",
-    "fit",
-    "kinetic",
-    "mesmerizing",
-    "oddly",
-    "perfect",
-    "precision",
-    "restore",
-    "sand",
-    "satisfying",
-    "smooth",
-    "transformation",
+INAPPROPRIATE_PAYOFF_TERMS = {
+    "awkward",
+    "chaos",
+    "comeback",
+    "cringe",
+    "embarrassing",
+    "funny",
+    "laugh",
+    "reaction",
+    "savage",
+    "said",
+    "unexpected",
+    "why",
 }
 
-SATISFYING_EXCLUDED_TERMS = {
+INAPPROPRIATE_EXCLUDED_TERMS = {
+    "adult",
     "animation",
     "cartoon",
+    "explicit",
     "game",
     "gameplay",
+    "gore",
+    "hate",
+    "hentai",
+    "incest",
+    "minor",
+    "minors",
     "movie",
     "music",
+    "nude",
+    "nudity",
+    "onlyfans",
     "podcast",
-    "reaction",
+    "porn",
+    "rape",
+    "sexual",
+    "sex",
     "song",
+    "suicide",
     "trailer",
     "tutorial",
+    "violence",
 }
 
-SATISFYING_THEME_QUERIES: dict[str, list[str]] = {
-    "oddly_satisfying": [
-        "oddly satisfying moments shorts",
-        "mesmerizing satisfying videos shorts",
-        "satisfying clips you cannot stop watching shorts",
+INAPPROPRIATE_THEME_QUERIES: dict[str, list[str]] = {
+    "out_of_pocket": [
+        "out of pocket funny comments shorts",
+        "out of pocket things people said shorts",
+        "wild funny comments shorts",
     ],
-    "cleaning": [
-        "satisfying cleaning transformations shorts",
-        "pressure washing transformation shorts",
-        "carpet cleaning satisfying shorts",
+    "awkward_interactions": [
+        "awkward funny interactions shorts",
+        "awkward social moments funny shorts",
+        "cringe funny conversations shorts",
     ],
-    "cutting": [
-        "perfectly cut things shorts",
-        "satisfying slicing and cutting shorts",
-        "precision cutting satisfying shorts",
+    "savage_comebacks": [
+        "savage comebacks funny shorts",
+        "funny comeback moments shorts",
+        "brutal funny replies shorts",
     ],
-    "restoration": [
-        "satisfying restoration videos shorts",
-        "restore old objects satisfying shorts",
-        "restoration transformation shorts",
+    "embarrassing": [
+        "embarrassing funny moments shorts",
+        "awkward embarrassing reactions shorts",
+        "funny cringe moments shorts",
     ],
-    "machines": [
-        "machines working perfectly shorts",
-        "satisfying manufacturing process shorts",
-        "perfect packaging machines shorts",
+    "double_entendre": [
+        "funny double entendre jokes shorts",
+        "innocent funny misunderstanding shorts",
+        "dirty minded funny jokes shorts",
     ],
-    "art_craft": [
-        "smooth satisfying art process shorts",
-        "satisfying woodworking pottery resin shorts",
-        "satisfying carving sculpting shorts",
+    "unfiltered_comments": [
+        "unfiltered funny comments shorts",
+        "people saying wild things funny shorts",
+        "funny unexpected comments shorts",
     ],
-    "before_after": [
-        "satisfying before and after transformations shorts",
-        "dramatic object transformation shorts",
-        "furniture car restoration before after shorts",
-    ],
-    "precision": [
-        "perfect fits and precision shorts",
-        "perfect alignment satisfying shorts",
-        "organizing perfectly satisfying shorts",
-    ],
-    "sand_slime_crushing": [
-        "kinetic sand slime crushing satisfying shorts",
-        "satisfying crushing videos shorts",
-        "satisfying slime mixing shorts",
-    ],
-    "mixed": [
-        "try not to feel satisfied shorts",
-        "most satisfying clips shorts",
-        "satisfying videos compilation shorts",
+    "reactions": [
+        "awkward funny reactions shorts",
+        "cringe reaction moments shorts",
+        "funny shocked reactions shorts",
     ],
 }
 
@@ -1462,6 +1459,7 @@ class YouTubeApiClient:
         region_code: str | None = None,
         video_duration: str | None = None,
         relevance_language: str | None = None,
+        safe_search: str = "moderate",
     ) -> list[dict[str, Any]]:
         params: dict[str, str | int] = {
             "part": "snippet",
@@ -1469,7 +1467,7 @@ class YouTubeApiClient:
             "maxResults": min(max_results, 50),
             "q": query,
             "order": order,
-            "safeSearch": "moderate",
+            "safeSearch": safe_search,
         }
         if published_after:
             params["publishedAfter"] = (
@@ -1796,32 +1794,26 @@ def _volleyball_theme_search_queries(query: str) -> list[str]:
     return [query, *VOLLEYBALL_THEME_QUERIES[theme]]
 
 
-def _satisfying_theme(query: str) -> str:
+def _inappropriate_theme(query: str) -> str:
     lowered = query.lower()
-    if any(term in lowered for term in ("cleaning", "pressure washing", "carpet")):
-        return "cleaning"
-    if any(term in lowered for term in ("cut", "slicing", "cutting")):
-        return "cutting"
-    if any(term in lowered for term in ("restoration", "restore")):
-        return "restoration"
-    if any(term in lowered for term in ("machine", "manufacturing", "packaging", "process")):
-        return "machines"
-    if any(term in lowered for term in ("art", "woodworking", "pottery", "resin", "carving")):
-        return "art_craft"
-    if any(term in lowered for term in ("before", "after", "transformation")):
-        return "before_after"
-    if any(term in lowered for term in ("fit", "precision", "align", "organize")):
-        return "precision"
-    if any(term in lowered for term in ("sand", "slime", "crushing")):
-        return "sand_slime_crushing"
-    if "try not" in lowered:
-        return "mixed"
-    return "oddly_satisfying"
+    if any(term in lowered for term in ("out of pocket", "wild comment")):
+        return "out_of_pocket"
+    if any(term in lowered for term in ("awkward", "interaction", "social", "conversation")):
+        return "awkward_interactions"
+    if any(term in lowered for term in ("savage", "comeback", "reply", "replies")):
+        return "savage_comebacks"
+    if any(term in lowered for term in ("embarrassing", "embarrassment")):
+        return "embarrassing"
+    if any(term in lowered for term in ("double entendre", "misunderstanding", "dirty minded")):
+        return "double_entendre"
+    if any(term in lowered for term in ("unfiltered", "saying wild", "unexpected comment")):
+        return "unfiltered_comments"
+    return "reactions"
 
 
-def _satisfying_theme_search_queries(query: str) -> list[str]:
-    theme = _satisfying_theme(query)
-    return [query, *SATISFYING_THEME_QUERIES[theme]]
+def _inappropriate_theme_search_queries(query: str) -> list[str]:
+    theme = _inappropriate_theme(query)
+    return [query, *INAPPROPRIATE_THEME_QUERIES[theme]]
 
 
 def _wwe_theme(query: str) -> str:
@@ -1902,10 +1894,10 @@ def _shorts_search_queries(
             _append_language_to_query(theme_query, language)
             for theme_query in _volleyball_theme_search_queries(query)
         ]
-    if settings and settings.content_domain == "satisfying":
+    if settings and settings.content_domain == "inappropriate":
         queries = [
             _append_language_to_query(theme_query, language)
-            for theme_query in _satisfying_theme_search_queries(query)
+            for theme_query in _inappropriate_theme_search_queries(query)
         ]
     if settings and settings.content_domain == "wwe":
         queries = [
@@ -2281,19 +2273,19 @@ def _volleyball_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
-def _satisfying_relevance_score(video: YouTubeVideo, query: str) -> float:
+def _inappropriate_relevance_score(video: YouTubeVideo, query: str) -> float:
     text = _video_search_text(video)
     tokens = set(re.findall(r"[a-z0-9]+", text))
     query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
     query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
     comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
-    core_matches = tokens & SATISFYING_CORE_TERMS
-    payoff_matches = tokens & SATISFYING_PAYOFF_TERMS
+    core_matches = tokens & INAPPROPRIATE_CORE_TERMS
+    payoff_matches = tokens & INAPPROPRIATE_PAYOFF_TERMS
     query_matches = comparable_tokens & query_tokens
-    excluded_matches = tokens & SATISFYING_EXCLUDED_TERMS
+    excluded_matches = tokens & INAPPROPRIATE_EXCLUDED_TERMS
     title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
-    title_core_matches = title_tokens & SATISFYING_CORE_TERMS
-    title_payoff_matches = title_tokens & SATISFYING_PAYOFF_TERMS
+    title_core_matches = title_tokens & INAPPROPRIATE_CORE_TERMS
+    title_payoff_matches = title_tokens & INAPPROPRIATE_PAYOFF_TERMS
 
     score = 0.0
     if core_matches:
@@ -2388,8 +2380,8 @@ def _domain_relevance_score(
         return _formula1_relevance_score(video, query)
     if settings and settings.content_domain == "volleyball":
         return _volleyball_relevance_score(video, query)
-    if settings and settings.content_domain == "satisfying":
-        return _satisfying_relevance_score(video, query)
+    if settings and settings.content_domain == "inappropriate":
+        return _inappropriate_relevance_score(video, query)
     if settings and settings.content_domain == "wwe":
         return _wwe_relevance_score(video, query)
     return 0.75
@@ -2403,7 +2395,7 @@ def _domain_relevance_threshold(settings: Settings | None) -> float | None:
         "tennis",
         "formula1",
         "volleyball",
-        "satisfying",
+        "inappropriate",
         "wwe",
     }:
         return 0.55
@@ -2548,7 +2540,7 @@ class CompilationQueryProvider:
             "tennis",
             "formula1",
             "volleyball",
-            "satisfying",
+            "inappropriate",
             "wwe",
         }
         if self.settings.content_domain in randomized_query_domains:
@@ -2653,8 +2645,8 @@ def _volleyball_query_combinations(settings: Settings) -> list[str]:
     ]
 
 
-def _satisfying_query_combinations(settings: Settings) -> list[str]:
-    pillars = _settings_csv(settings.satisfying_query_pillars)
+def _inappropriate_query_combinations(settings: Settings) -> list[str]:
+    pillars = _settings_csv(settings.inappropriate_query_pillars)
     return [_ensure_shorts_query(query) for query in pillars]
 
 
@@ -2693,8 +2685,8 @@ def _compilation_queries(settings: Settings) -> list[str]:
         generated = _volleyball_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
-    elif settings.content_domain == "satisfying":
-        generated = _satisfying_query_combinations(settings)
+    elif settings.content_domain == "inappropriate":
+        generated = _inappropriate_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     elif settings.content_domain == "wwe":
@@ -2904,7 +2896,7 @@ class YouTubeDataProvider:
                 "tennis",
                 "formula1",
                 "volleyball",
-                "satisfying",
+                "inappropriate",
                 "wwe",
             }
             else pool_size
@@ -2922,7 +2914,7 @@ class YouTubeDataProvider:
                 "tennis",
                 "formula1",
                 "volleyball",
-                "satisfying",
+                "inappropriate",
                 "wwe",
             }
         )
@@ -2937,15 +2929,18 @@ class YouTubeDataProvider:
             search_windows = (None,) if focused_domain else (published_after, None)
             for attempt_published_after in search_windows:
                 try:
-                    search_items = self.client.search_videos(
-                        query=search_query,
-                        max_results=query_pool_size,
-                        order="relevance",
-                        published_after=attempt_published_after,
-                        region_code=self.settings.youtube_region_code if self.settings else None,
-                        video_duration="short",
-                        relevance_language=language,
-                    )
+                    search_kwargs: dict[str, Any] = {
+                        "query": search_query,
+                        "max_results": query_pool_size,
+                        "order": "relevance",
+                        "published_after": attempt_published_after,
+                        "region_code": self.settings.youtube_region_code if self.settings else None,
+                        "video_duration": "short",
+                        "relevance_language": language,
+                    }
+                    if self.settings and self.settings.youtube_safe_search != "moderate":
+                        search_kwargs["safe_search"] = self.settings.youtube_safe_search
+                    search_items = self.client.search_videos(**search_kwargs)
                 except YouTubeApiError as exc:
                     if exc.status_code in {403, 429}:
                         LOGGER.warning(
@@ -2992,7 +2987,7 @@ class YouTubeDataProvider:
                         "tennis",
                         "formula1",
                         "volleyball",
-                        "satisfying",
+                        "inappropriate",
                         "wwe",
                     }
                     and len(videos) >= pool_size
@@ -3010,7 +3005,7 @@ class YouTubeDataProvider:
                     "tennis",
                     "formula1",
                     "volleyball",
-                    "satisfying",
+                    "inappropriate",
                     "wwe",
                 }
                 and len(videos) >= pool_size
@@ -4055,7 +4050,7 @@ def build_providers(
             "tennis",
             "formula1",
             "volleyball",
-            "satisfying",
+            "inappropriate",
             "wwe",
             "compilation",
         }

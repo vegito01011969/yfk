@@ -115,7 +115,7 @@ def test_scheduled_workflows_do_not_hard_fail_on_colab_session_listing() -> None
         "tennis-pipeline.yml",
         "formula1-pipeline.yml",
         "volleyball-pipeline.yml",
-        "satisfying-pipeline.yml",
+        "inappropriate-pipeline.yml",
         "wwe-pipeline.yml",
     ):
         workflow = (workflows_dir / workflow_name).read_text(encoding="utf-8")
@@ -1305,7 +1305,7 @@ def test_niche_uploads_require_expected_channel_id(tmp_path: Path) -> None:
         "tennis",
         "formula1",
         "volleyball",
-        "satisfying",
+        "inappropriate",
         "wwe",
     ):
         settings = make_settings(tmp_path)
