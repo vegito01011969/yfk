@@ -1,4 +1,4 @@
-name: scheduled-unexpected-shorts-pipeline
+name: scheduled-volleyball-shorts-pipeline
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     - cron: "30 2,6,10,14,18,22 * * *"
 
 concurrency:
-  group: unexpected-youtube-shorts-pipeline
+  group: volleyball-youtube-shorts-pipeline
   cancel-in-progress: false
 
 jobs:
@@ -19,11 +19,11 @@ jobs:
 
     env:
       CI: "true"
-      CONTENT_DOMAIN: unexpected
-      CONTENT_LABEL: Unexpected Moments
+      CONTENT_DOMAIN: volleyball
+      CONTENT_LABEL: Volleyball Moments
       SOURCE_LANGUAGE_MODE: cycle
       SOURCE_LANGUAGES: en
-      SOURCE_HISTORY_PATH: data/unexpected_source_video_history.json
+      SOURCE_HISTORY_PATH: data/volleyball_source_video_history.json
       USE_REAL_MEDIA: "true"
       DOWNLOAD_BACKEND: colab
       MAX_VIDEOS_PER_TREND: "40"
@@ -102,15 +102,15 @@ jobs:
       - name: Prepare runtime directories
         run: mkdir -p data workdir/runs secrets
 
-      - name: Restore Unexpected pipeline state
+      - name: Restore Volleyball pipeline state
         uses: actions/cache/restore@v4
         with:
-          path: data/unexpected_source_video_history.json
-          key: unexpected-pipeline-state-v1-${{ github.run_id }}
+          path: data/volleyball_source_video_history.json
+          key: volleyball-pipeline-state-v1-${{ github.run_id }}
           restore-keys: |
-            unexpected-pipeline-state-v1-
+            volleyball-pipeline-state-v1-
 
-      - name: Materialize Unexpected YouTube auth files
+      - name: Materialize Volleyball YouTube auth files
         env:
           YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.UNEXPECTED_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
           YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.UNEXPECTED_YOUTUBE_OAUTH_TOKEN_JSON }}
@@ -173,22 +173,22 @@ jobs:
       - name: Validate YouTube upload auth
         run: viral-pipeline auth-youtube-upload
 
-      - name: Run Unexpected pipeline
+      - name: Run Volleyball pipeline
         run: python scripts/run_pipeline_until_upload.py
 
-      - name: Summarize Unexpected pipeline run
+      - name: Summarize Volleyball pipeline run
         if: always()
         env:
-          PIPELINE_SUMMARY_LABEL: Unexpected Shorts Pipeline
+          PIPELINE_SUMMARY_LABEL: Volleyball Shorts Pipeline
         run: python scripts/summarize_pipeline_run.py
 
-      - name: Upload Unexpected pipeline diagnostics
+      - name: Upload Volleyball pipeline diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unexpected-pipeline-diagnostics-${{ github.run_id }}
+          name: volleyball-pipeline-diagnostics-${{ github.run_id }}
           path: |
-            data/unexpected_source_video_history.json
+            data/volleyball_source_video_history.json
             workdir/runs/**/context.json
             workdir/runs/**/publish/publish_manifest.json
             workdir/runs/**/upload/youtube_upload.json
@@ -197,13 +197,13 @@ jobs:
             workdir/runs/**/downloads/result.json
           retention-days: 3
 
-      - name: Cleanup bulky Unexpected pipeline state
+      - name: Cleanup bulky Volleyball pipeline state
         if: always()
         run: python scripts/cleanup_pipeline_state.py
 
-      - name: Save updated Unexpected pipeline state
+      - name: Save updated Volleyball pipeline state
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: data/unexpected_source_video_history.json
-          key: unexpected-pipeline-state-v1-${{ github.run_id }}
+          path: data/volleyball_source_video_history.json
+          key: volleyball-pipeline-state-v1-${{ github.run_id }}

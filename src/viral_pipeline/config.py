@@ -190,29 +190,35 @@ FORMULA1_EVENT_KEYWORDS = (
     "podium,crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
-UNEXPECTED_ACTIVITY_SEED_QUERIES = (
-    "unexpected moments,close calls caught on camera,perfect timing moments,"
-    "impossible saves caught on camera,unexpected reactions,complete chaos moments,"
-    "impossible luck,nobody saw that coming"
+VOLLEYBALL_ACTIVITY_SEED_QUERIES = (
+    "viral volleyball moments,volleyball shorts,volleyball challenge,"
+    "volleyball compilation,viral volleyball trend,volleyball spikes,"
+    "volleyball blocks,volleyball rallies"
 )
 
-UNEXPECTED_COMPILATION_QUERIES = (
-    "too close moments shorts,perfect timing moments shorts,"
-    "impossible saves caught on camera shorts,unexpected outcomes shorts,"
-    "unexpected reactions shorts,complete chaos moments shorts,"
-    "impossible luck moments shorts,nobody saw that coming shorts"
+VOLLEYBALL_COMPILATION_QUERIES = (
+    "unreal volleyball spikes shorts,epic volleyball blocks shorts,"
+    "unforgettable volleyball moments shorts,insane volleyball saves shorts,"
+    "best volleyball rallies shorts,impossible volleyball serves shorts"
 )
 
-UNEXPECTED_QUERY_PILLARS = (
-    "too close,perfect timing,impossible saves,unexpected outcomes,"
-    "unexpected reactions,complete chaos,impossible luck,nobody saw that coming"
+VOLLEYBALL_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
 )
 
-UNEXPECTED_EVENT_KEYWORDS = (
-    "close call,near miss,perfect timing,impossible save,last second save,"
-    "unexpected,outcome,reaction,chaos,luck,nobody saw,what happened,"
-    "caught on camera,fail,fails,surprise,shocked,unbelievable,incredible,"
-    "insane,viral,accident,rescue,save,saves"
+VOLLEYBALL_QUERY_TYPES = (
+    "volleyball spikes,volleyball blocks,volleyball moments,volleyball saves,"
+    "volleyball rallies,volleyball serves,volleyball aces,volleyball digs,"
+    "volleyball set assists,volleyball match points,volleyball comebacks,"
+    "volleyball pancake saves,volleyball jump serves,volleyball trick shots"
+)
+
+VOLLEYBALL_EVENT_KEYWORDS = (
+    "volleyball,beach volleyball,indoor volleyball,spike,spikes,block,blocks,"
+    "save,saves,dig,digs,rally,rallies,serve,serves,ace,aces,set,sets,setter,"
+    "assist,assists,kill,kills,hit,hits,libero,net,match,point,match point,"
+    "comeback,team,court,crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
 SATISFYING_ACTIVITY_SEED_QUERIES = (
@@ -332,7 +338,8 @@ class Settings(BaseSettings):
     tennis_query_types: str = TENNIS_QUERY_TYPES
     formula1_query_adjectives: str = FORMULA1_QUERY_ADJECTIVES
     formula1_query_types: str = FORMULA1_QUERY_TYPES
-    unexpected_query_pillars: str = UNEXPECTED_QUERY_PILLARS
+    volleyball_query_adjectives: str = VOLLEYBALL_QUERY_ADJECTIVES
+    volleyball_query_types: str = VOLLEYBALL_QUERY_TYPES
     satisfying_query_pillars: str = SATISFYING_QUERY_PILLARS
     magic_query_pillars: str = MAGIC_QUERY_PILLARS
     event_keywords: str = ""
@@ -435,17 +442,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = FORMULA1_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = FORMULA1_EVENT_KEYWORDS
-        elif self.content_domain == "unexpected":
+        elif self.content_domain == "volleyball":
             if not self.content_label:
-                self.content_label = "Unexpected Moments"
+                self.content_label = "Volleyball Moments"
             if not self.source_languages:
                 self.source_languages = "en"
             if not self.youtube_activity_seed_queries:
-                self.youtube_activity_seed_queries = UNEXPECTED_ACTIVITY_SEED_QUERIES
+                self.youtube_activity_seed_queries = VOLLEYBALL_ACTIVITY_SEED_QUERIES
             if not self.compilation_queries:
-                self.compilation_queries = UNEXPECTED_COMPILATION_QUERIES
+                self.compilation_queries = VOLLEYBALL_COMPILATION_QUERIES
             if not self.event_keywords:
-                self.event_keywords = UNEXPECTED_EVENT_KEYWORDS
+                self.event_keywords = VOLLEYBALL_EVENT_KEYWORDS
         elif self.content_domain == "satisfying":
             if not self.content_label:
                 self.content_label = "Satisfying Moments"

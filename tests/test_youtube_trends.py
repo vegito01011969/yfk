@@ -523,7 +523,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
     basketball = Settings(_env_file=None, content_domain="basketball")
     tennis = Settings(_env_file=None, content_domain="tennis")
     formula1 = Settings(_env_file=None, content_domain="formula1")
-    unexpected = Settings(_env_file=None, content_domain="unexpected")
+    volleyball = Settings(_env_file=None, content_domain="volleyball")
     satisfying = Settings(_env_file=None, content_domain="satisfying")
     magic = Settings(_env_file=None, content_domain="magic")
 
@@ -556,9 +556,10 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert formula1.formula1_query_adjectives.split(",")[0] == "unreal"
     assert formula1.formula1_query_types.split(",")[0] == "formula 1 overtakes"
 
-    assert unexpected.content_label == "Unexpected Moments"
-    assert unexpected.source_languages == "en"
-    assert unexpected.unexpected_query_pillars.split(",")[0] == "too close"
+    assert volleyball.content_label == "Volleyball Moments"
+    assert volleyball.source_languages == "en"
+    assert volleyball.volleyball_query_adjectives.split(",")[0] == "unreal"
+    assert volleyball.volleyball_query_types.split(",")[0] == "volleyball spikes"
 
     assert satisfying.content_label == "Satisfying Moments"
     assert satisfying.source_languages == "en"
@@ -803,33 +804,40 @@ def test_formula1_relevance_rejects_simulator_gameplay() -> None:
     assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
 
 
-def test_unexpected_short_queries_stay_inside_selected_pillar() -> None:
-    settings = Settings(_env_file=None, content_domain="unexpected")
+def test_volleyball_short_queries_stay_inside_selected_theme() -> None:
+    settings = Settings(_env_file=None, content_domain="volleyball")
 
-    queries = _shorts_search_queries("impossible luck shorts", "en", settings)
+    queries = _shorts_search_queries("unreal volleyball spikes shorts", "en", settings)
 
     assert queries
-    assert all(any(term in query.lower() for term in ("luck", "lucky")) for query in queries)
-    assert not any("perfect timing" in query.lower() for query in queries)
+    assert all("volleyball" in query.lower() for query in queries)
+    assert all(
+        any(term in query.lower() for term in ("spike", "spikes", "kill", "attack"))
+        for query in queries
+    )
+    assert not any(
+        "volleyball blocks shorts" == query.lower().replace(" english", "")
+        for query in queries
+    )
 
 
-def test_unexpected_relevance_rejects_gameplay() -> None:
-    settings = Settings(_env_file=None, content_domain="unexpected")
+def test_volleyball_relevance_rejects_gameplay() -> None:
+    settings = Settings(_env_file=None, content_domain="volleyball")
     real_moment = YouTubeVideo(
-        id="timing",
+        id="spike",
         trend_id="trend-1",
-        title="Perfect timing caught on camera #shorts",
-        url="https://www.youtube.com/watch?v=timing",
-        channel_title="Unexpected Moments",
+        title="Insane volleyball spike and block #shorts",
+        url="https://www.youtube.com/watch?v=spike",
+        channel_title="Volleyball Moments",
         view_count=1_000_000,
         like_count=100_000,
-        metadata={"tags": ["perfect timing", "caught on camera", "unexpected"]},
+        metadata={"tags": ["volleyball", "spike", "block", "insane"]},
     )
     gameplay = real_moment.model_copy(
         update={
             "id": "gameplay",
-            "title": "Perfect timing gameplay tutorial #shorts",
-            "metadata": {"tags": ["gameplay", "tutorial", "perfect timing"]},
+            "title": "Volleyball Champions gameplay tutorial #shorts",
+            "metadata": {"tags": ["volleyball", "gameplay", "tutorial"]},
         }
     )
 

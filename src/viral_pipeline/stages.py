@@ -1517,7 +1517,7 @@ def _require_expected_upload_channel_for_domain(settings: Settings) -> None:
         "basketball",
         "tennis",
         "formula1",
-        "unexpected",
+        "volleyball",
         "satisfying",
         "magic",
     }

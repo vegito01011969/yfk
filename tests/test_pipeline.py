@@ -114,7 +114,7 @@ def test_scheduled_workflows_do_not_hard_fail_on_colab_session_listing() -> None
         "basketball-pipeline.yml",
         "tennis-pipeline.yml",
         "formula1-pipeline.yml",
-        "unexpected-pipeline.yml",
+        "volleyball-pipeline.yml",
         "satisfying-pipeline.yml",
         "magic-pipeline.yml",
     ):
@@ -1304,7 +1304,7 @@ def test_niche_uploads_require_expected_channel_id(tmp_path: Path) -> None:
         "basketball",
         "tennis",
         "formula1",
-        "unexpected",
+        "volleyball",
         "satisfying",
         "magic",
     ):
