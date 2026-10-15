@@ -2,8 +2,6 @@ name: scheduled-inappropriate-shorts-pipeline
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "55 2,6,10,14,18,22 * * *"
 
 concurrency:
   group: inappropriate-youtube-shorts-pipeline

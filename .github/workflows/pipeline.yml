@@ -2,8 +2,6 @@ name: scheduled-youtube-shorts-pipeline
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0,4,8,12,16,20 * * *"
 
 concurrency:
   group: youtube-shorts-pipeline

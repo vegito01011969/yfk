@@ -2,8 +2,6 @@ name: scheduled-basketball-shorts-pipeline
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 1,5,9,13,17,21 * * *"
 
 concurrency:
   group: basketball-youtube-shorts-pipeline
