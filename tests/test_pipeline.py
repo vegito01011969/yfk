@@ -920,6 +920,30 @@ def test_pipeline_retry_wrapper_detects_youtube_challenge_failure(tmp_path: Path
     assert "JS/PO-token challenge" in reason
 
 
+def test_pipeline_retry_wrapper_detects_invalid_colab_adc(tmp_path: Path) -> None:
+    retry_script = load_pipeline_retry_script()
+
+    blocked, reason = retry_script._download_auth_blocked(
+        {
+            "metadata": {
+                "download_summary": {
+                    "attempted_count": 3,
+                    "downloaded_count": 0,
+                    "failed_count": 3,
+                    "error_counts": {"colab_batch_command_failed": 3},
+                    "sample_failures": [
+                        {"stderr": "No valid default credentials found."},
+                    ],
+                }
+            }
+        }
+    )
+
+    assert blocked is True
+    assert reason is not None
+    assert "COLAB_ADC_JSON" in reason
+
+
 def test_download_stage_reports_youtube_bot_wall(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
 

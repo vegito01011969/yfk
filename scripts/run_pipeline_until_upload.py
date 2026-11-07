@@ -31,11 +31,13 @@ def _download_auth_blocked(context: dict) -> tuple[bool, str | None]:
     if not isinstance(summary, dict):
         return False, None
     failure_counts = summary.get("failure_counts") or {}
+    error_counts = summary.get("error_counts") or {}
     attempted = int(summary.get("attempted_count") or 0)
     downloaded = int(summary.get("downloaded_count") or 0)
     failed = int(summary.get("failed_count") or 0)
     bot_wall = int(failure_counts.get("youtube_bot_wall") or 0)
     challenge_failed = int(failure_counts.get("youtube_challenge_failed") or 0)
+    colab_command_failed = int(error_counts.get("colab_batch_command_failed") or 0)
     if attempted and downloaded == 0 and failed and bot_wall == failed:
         return (
             True,
@@ -50,6 +52,26 @@ def _download_auth_blocked(context: dict) -> tuple[bool, str | None]:
             (
                 "All attempted yt-dlp downloads failed YouTube's JS/PO-token challenge. "
                 "The Colab runtime cannot currently solve YouTube extraction challenges."
+            ),
+        )
+    sample_failures = summary.get("sample_failures") or []
+    stderr_text = "\n".join(
+        str(failure.get("stderr") or "")
+        for failure in sample_failures
+        if isinstance(failure, dict)
+    )
+    if (
+        attempted
+        and downloaded == 0
+        and failed
+        and colab_command_failed == failed
+        and "No valid default credentials found" in stderr_text
+    ):
+        return (
+            True,
+            (
+                "Colab Application Default Credentials are missing, expired, or invalid. "
+                "Refresh the COLAB_ADC_JSON GitHub secret before retrying."
             ),
         )
     return False, None
