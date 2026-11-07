@@ -2,6 +2,14 @@ name: scheduled-formula1-shorts-pipeline
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 0"
+    - cron: "0 16 * * 1"
+    - cron: "0 7 * * 2"
+    - cron: "0 17 * * 3"
+    - cron: "0 8 * * 4"
+    - cron: "0 18 * * 5"
+    - cron: "0 9 * * 6"
 
 concurrency:
   group: formula1-youtube-shorts-pipeline
@@ -45,7 +53,7 @@ jobs:
       YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID: ${{ secrets.FORMULA1_YOUTUBE_CHANNEL_ID }}
       YOUTUBE_VIDEO_MADE_FOR_KIDS: "false"
       YOUTUBE_VIDEO_SELF_DECLARED_MADE_FOR_KIDS: "false"
-      YOUTUBE_API_KEY: ${{ secrets.FORMULA1_YOUTUBE_API_KEY }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_PLATFORM_API_KEY }}
       GROQCLOUD_API_KEY: ${{ secrets.GROQCLOUD_API_KEY }}
       YOUTUBE_OAUTH_CLIENT_SECRETS: secrets/youtube_client_secret.json
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
@@ -110,7 +118,7 @@ jobs:
 
       - name: Materialize Formula 1 YouTube auth files
         env:
-          YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.FORMULA1_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
+          YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_PLATFORM_OAUTH_CLIENT_SECRETS_JSON }}
           YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.FORMULA1_YOUTUBE_OAUTH_TOKEN_JSON }}
           YOUTUBE_COOKIES_TXT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
           COLAB_ADC_JSON: ${{ secrets.COLAB_ADC_JSON }}

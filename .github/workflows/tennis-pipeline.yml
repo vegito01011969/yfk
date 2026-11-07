@@ -2,6 +2,14 @@ name: scheduled-tennis-shorts-pipeline
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 0"
+    - cron: "0 14 * * 1"
+    - cron: "0 5 * * 2"
+    - cron: "0 15 * * 3"
+    - cron: "0 6 * * 4"
+    - cron: "0 16 * * 5"
+    - cron: "0 7 * * 6"
 
 concurrency:
   group: tennis-youtube-shorts-pipeline
@@ -45,7 +53,7 @@ jobs:
       YOUTUBE_UPLOAD_EXPECTED_CHANNEL_ID: ${{ secrets.TENNIS_YOUTUBE_CHANNEL_ID }}
       YOUTUBE_VIDEO_MADE_FOR_KIDS: "false"
       YOUTUBE_VIDEO_SELF_DECLARED_MADE_FOR_KIDS: "false"
-      YOUTUBE_API_KEY: ${{ secrets.TENNIS_YOUTUBE_API_KEY }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_PLATFORM_API_KEY }}
       GROQCLOUD_API_KEY: ${{ secrets.GROQCLOUD_API_KEY }}
       YOUTUBE_OAUTH_CLIENT_SECRETS: secrets/youtube_client_secret.json
       YOUTUBE_OAUTH_TOKEN_PATH: secrets/youtube_oauth_token.json
@@ -110,7 +118,7 @@ jobs:
 
       - name: Materialize tennis YouTube auth files
         env:
-          YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.TENNIS_YOUTUBE_OAUTH_CLIENT_SECRETS_JSON }}
+          YOUTUBE_OAUTH_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_PLATFORM_OAUTH_CLIENT_SECRETS_JSON }}
           YOUTUBE_OAUTH_TOKEN_JSON: ${{ secrets.TENNIS_YOUTUBE_OAUTH_TOKEN_JSON }}
           YOUTUBE_COOKIES_TXT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
           COLAB_ADC_JSON: ${{ secrets.COLAB_ADC_JSON }}
