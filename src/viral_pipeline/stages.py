@@ -1512,6 +1512,7 @@ class UploadYouTubeStage(PipelineStage):
 
 def _require_expected_upload_channel_for_domain(settings: Settings) -> None:
     guarded_domains = {
+        "kids_funny",
         "football",
         "cricket",
         "basketball",

@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * 0"
-    - cron: "0 16 * * 1"
-    - cron: "0 7 * * 2"
-    - cron: "0 17 * * 3"
-    - cron: "0 8 * * 4"
-    - cron: "0 18 * * 5"
-    - cron: "0 9 * * 6"
+    - cron: "0 8 * * 1"
+    - cron: "0 10 * * 2"
+    - cron: "0 12 * * 3"
+    - cron: "0 14 * * 4"
+    - cron: "0 16 * * 5"
+    - cron: "0 0 * * 6"
 
 concurrency:
   group: formula1-youtube-shorts-pipeline

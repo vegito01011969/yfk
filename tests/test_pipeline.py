@@ -1247,6 +1247,7 @@ def test_upload_youtube_stage_skips_when_no_clips_were_selected(tmp_path: Path) 
 def test_upload_youtube_stage_skips_non_video_render_path(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     settings.enable_youtube_upload = True
+    settings.youtube_upload_expected_channel_id = "UC_TEST_KIDS_CHANNEL"
     manifest_path = tmp_path / "render" / "edit_decision_manifest.json"
     manifest_path.parent.mkdir(parents=True)
     manifest_path.write_text("{}", encoding="utf-8")
