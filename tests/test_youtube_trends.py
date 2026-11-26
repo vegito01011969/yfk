@@ -526,6 +526,7 @@ def test_settings_apply_domain_specific_defaults() -> None:
     volleyball = Settings(_env_file=None, content_domain="volleyball")
     inappropriate = Settings(_env_file=None, content_domain="inappropriate")
     wwe = Settings(_env_file=None, content_domain="wwe")
+    chess = Settings(_env_file=None, content_domain="chess")
 
     assert kids.content_label == "Funny Kid Clips"
     assert kids.source_languages == "en,hi"
@@ -569,6 +570,11 @@ def test_settings_apply_domain_specific_defaults() -> None:
     assert wwe.source_languages == "en"
     assert wwe.wwe_query_adjectives.split(",")[0] == "unreal"
     assert wwe.wwe_query_types.split(",")[0] == "wwe finishers"
+
+    assert chess.content_label == "Chess Moments"
+    assert chess.source_languages == "en"
+    assert chess.chess_query_adjectives.split(",")[0] == "unreal"
+    assert chess.chess_query_types.split(",")[0] == "chess moves"
 
 
 def test_football_compilation_query_provider_enforces_football_keyword(tmp_path) -> None:
@@ -921,6 +927,46 @@ def test_wwe_relevance_rejects_gameplay() -> None:
 
     assert _domain_relevance_score(settings, real_moment, real_moment.title) >= 0.55
     assert _domain_relevance_score(settings, gameplay, gameplay.title) < 0.55
+
+
+def test_chess_short_queries_stay_inside_selected_theme() -> None:
+    settings = Settings(_env_file=None, content_domain="chess")
+
+    queries = _shorts_search_queries("unreal chess checkmates shorts", "en", settings)
+
+    assert queries
+    assert all("chess" in query.lower() for query in queries)
+    assert all(
+        any(term in query.lower() for term in ("checkmate", "mate")) for query in queries
+    )
+    assert not any(
+        "chess sacrifices shorts" == query.lower().replace(" english", "")
+        for query in queries
+    )
+
+
+def test_chess_relevance_rejects_unrelated_content() -> None:
+    settings = Settings(_env_file=None, content_domain="chess")
+    chess_moment = YouTubeVideo(
+        id="checkmate",
+        trend_id="trend-1",
+        title="Brilliant chess checkmate in a wild time scramble #shorts",
+        url="https://www.youtube.com/watch?v=checkmate",
+        channel_title="Chess Moments",
+        view_count=1_000_000,
+        like_count=100_000,
+        metadata={"tags": ["chess", "checkmate", "time scramble", "brilliant"]},
+    )
+    unrelated = chess_moment.model_copy(
+        update={
+            "id": "unrelated",
+            "title": "Minecraft chessboard animation trailer #shorts",
+            "metadata": {"tags": ["minecraft", "animation", "trailer"]},
+        }
+    )
+
+    assert _domain_relevance_score(settings, chess_moment, chess_moment.title) >= 0.55
+    assert _domain_relevance_score(settings, unrelated, unrelated.title) < 0.55
 
 
 def test_youtube_short_search_filters_seen_video_ids(tmp_path) -> None:

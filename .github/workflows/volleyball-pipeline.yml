@@ -6,10 +6,10 @@ on:
     - cron: "0 12 * * 0"
     - cron: "0 14 * * 1"
     - cron: "0 16 * * 2"
-    - cron: "0 0 * * 3"
-    - cron: "0 2 * * 4"
-    - cron: "0 4 * * 5"
-    - cron: "0 6 * * 6"
+    - cron: "0 18 * * 3"
+    - cron: "0 0 * * 4"
+    - cron: "0 2 * * 5"
+    - cron: "0 4 * * 6"
 
 concurrency:
   group: volleyball-youtube-shorts-pipeline

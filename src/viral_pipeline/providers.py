@@ -626,6 +626,125 @@ WWE_THEME_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+CHESS_CORE_TERMS = {
+    "bishop",
+    "board",
+    "checkmate",
+    "chess",
+    "clock",
+    "endgame",
+    "grandmaster",
+    "king",
+    "knight",
+    "opening",
+    "pawn",
+    "queen",
+    "rook",
+    "sacrifice",
+    "tactic",
+}
+
+CHESS_MOMENT_TERMS = {
+    "amazing",
+    "best",
+    "blunder",
+    "brilliant",
+    "crazy",
+    "dramatic",
+    "epic",
+    "impossible",
+    "incredible",
+    "insane",
+    "legendary",
+    "match",
+    "moment",
+    "moments",
+    "puzzle",
+    "shocking",
+    "short",
+    "streamer",
+    "tournament",
+    "unbelievable",
+    "unforgettable",
+    "unreal",
+    "viral",
+}
+
+CHESS_EXCLUDED_TERMS = {
+    "animation",
+    "cartoon",
+    "chessable",
+    "chessboard kingdom",
+    "minecraft",
+    "movie",
+    "roblox",
+    "song",
+    "trailer",
+}
+
+CHESS_THEME_QUERIES: dict[str, list[str]] = {
+    "moves": [
+        "unreal chess moves shorts",
+        "brilliant chess moves shorts",
+        "impossible chess move shorts",
+        "best chess moves shorts",
+    ],
+    "checkmates": [
+        "epic chess checkmates shorts",
+        "insane chess checkmate shorts",
+        "beautiful chess checkmates shorts",
+        "impossible chess checkmates shorts",
+    ],
+    "tactics": [
+        "insane chess tactics shorts",
+        "brilliant chess tactic shorts",
+        "best chess combinations shorts",
+        "unreal chess puzzles shorts",
+    ],
+    "sacrifices": [
+        "epic chess sacrifices shorts",
+        "brilliant queen sacrifice chess shorts",
+        "insane chess sacrifice shorts",
+        "unforgettable chess sacrifices shorts",
+    ],
+    "blunders": [
+        "shocking chess blunders shorts",
+        "crazy chess blunders shorts",
+        "unforgettable chess blunder shorts",
+        "chess moments nobody expected shorts",
+    ],
+    "endgames": [
+        "impossible chess endgames shorts",
+        "insane chess endgame shorts",
+        "epic chess time scramble shorts",
+        "best chess endgame moments shorts",
+    ],
+    "openings": [
+        "brilliant chess openings shorts",
+        "best chess opening traps shorts",
+        "insane chess opening moments shorts",
+        "unreal chess opening moves shorts",
+    ],
+    "online": [
+        "insane online chess moments shorts",
+        "best chess streamer moments shorts",
+        "unreal chess online games shorts",
+        "crazy chess stream moments shorts",
+    ],
+    "tournaments": [
+        "unforgettable chess tournament moments shorts",
+        "epic chess match moments shorts",
+        "best grandmaster chess moments shorts",
+        "insane chess tournament moves shorts",
+    ],
+    "moments": [
+        "unforgettable chess moments shorts",
+        "shocking chess moments shorts",
+        "chess moments that shocked everyone shorts",
+        "crazy chess moments shorts",
+    ],
+}
+
 FOOTBALL_CORE_TERMS = {
     "assist",
     "ball",
@@ -1618,6 +1737,12 @@ def _ensure_wwe_query(query: str) -> str:
     return f"wwe {query}"
 
 
+def _ensure_chess_query(query: str) -> str:
+    if "chess" in query.lower():
+        return query
+    return f"chess {query}"
+
+
 def _domain_search_query(query: str, settings: Settings | None) -> str:
     if settings and settings.content_domain == "football":
         return _ensure_football_query(query)
@@ -1633,6 +1758,8 @@ def _domain_search_query(query: str, settings: Settings | None) -> str:
         return _ensure_volleyball_query(query)
     if settings and settings.content_domain == "wwe":
         return _ensure_wwe_query(query)
+    if settings and settings.content_domain == "chess":
+        return _ensure_chess_query(query)
     return query
 
 
@@ -1840,6 +1967,34 @@ def _wwe_theme_search_queries(query: str) -> list[str]:
     return [query, *WWE_THEME_QUERIES[theme]]
 
 
+def _chess_theme(query: str) -> str:
+    lowered = query.lower()
+    if any(term in lowered for term in ("checkmate", "checkmates", "mate in")):
+        return "checkmates"
+    if any(term in lowered for term in ("tactic", "tactics", "combination", "puzzle")):
+        return "tactics"
+    if any(term in lowered for term in ("sacrifice", "sacrifices", "sac")):
+        return "sacrifices"
+    if any(term in lowered for term in ("blunder", "blunders", "mistake")):
+        return "blunders"
+    if any(term in lowered for term in ("endgame", "endgames", "time scramble", "clock")):
+        return "endgames"
+    if any(term in lowered for term in ("opening", "openings", "opening trap")):
+        return "openings"
+    if any(term in lowered for term in ("online", "streamer", "stream", "chesscom")):
+        return "online"
+    if any(term in lowered for term in ("tournament", "grandmaster", "match")):
+        return "tournaments"
+    if any(term in lowered for term in ("move", "moves", "brilliant")):
+        return "moves"
+    return "moments"
+
+
+def _chess_theme_search_queries(query: str) -> list[str]:
+    theme = _chess_theme(query)
+    return [query, *CHESS_THEME_QUERIES[theme]]
+
+
 def _shorts_search_queries(
     query: str,
     language: str | None,
@@ -1903,6 +2058,11 @@ def _shorts_search_queries(
         queries = [
             _append_language_to_query(theme_query, language)
             for theme_query in _wwe_theme_search_queries(query)
+        ]
+    if settings and settings.content_domain == "chess":
+        queries = [
+            _append_language_to_query(theme_query, language)
+            for theme_query in _chess_theme_search_queries(query)
         ]
 
     deduped: list[str] = []
@@ -2361,6 +2521,45 @@ def _wwe_relevance_score(video: YouTubeVideo, query: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _chess_relevance_score(video: YouTubeVideo, query: str) -> float:
+    text = _video_search_text(video)
+    tokens = set(re.findall(r"[a-z0-9]+", text))
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    query_tokens |= {token.rstrip("s") for token in query_tokens if len(token) > 3}
+    comparable_tokens = tokens | {token.rstrip("s") for token in tokens if len(token) > 3}
+    core_matches = tokens & CHESS_CORE_TERMS
+    moment_matches = tokens & CHESS_MOMENT_TERMS
+    query_matches = comparable_tokens & query_tokens
+    excluded_matches = tokens & CHESS_EXCLUDED_TERMS
+    title_tokens = set(re.findall(r"[a-z0-9]+", video.title.lower()))
+    title_core_matches = title_tokens & CHESS_CORE_TERMS
+
+    score = 0.0
+    if core_matches:
+        score += min(0.4, 0.2 + len(core_matches) * 0.04)
+    if moment_matches:
+        score += min(0.26, 0.1 + len(moment_matches) * 0.035)
+    if query_matches:
+        score += min(0.22, len(query_matches) * 0.04)
+    if video.view_count:
+        score += min(0.14, video.view_count / 1_500_000 * 0.14)
+    if video.like_count:
+        score += min(0.08, video.like_count / 150_000 * 0.08)
+    if "short" in text or "#shorts" in text:
+        score += 0.05
+
+    if excluded_matches:
+        score -= min(0.75, 0.4 + len(excluded_matches) * 0.08)
+    if not core_matches:
+        score -= 0.32
+    if excluded_matches & title_tokens:
+        score -= 0.2
+    if not title_core_matches:
+        score -= 0.24
+
+    return round(max(0.0, min(1.0, score)), 4)
+
+
 def _domain_relevance_score(
     settings: Settings | None,
     video: YouTubeVideo,
@@ -2384,6 +2583,8 @@ def _domain_relevance_score(
         return _inappropriate_relevance_score(video, query)
     if settings and settings.content_domain == "wwe":
         return _wwe_relevance_score(video, query)
+    if settings and settings.content_domain == "chess":
+        return _chess_relevance_score(video, query)
     return 0.75
 
 
@@ -2397,6 +2598,7 @@ def _domain_relevance_threshold(settings: Settings | None) -> float | None:
         "volleyball",
         "inappropriate",
         "wwe",
+        "chess",
     }:
         return 0.55
     if settings and settings.content_domain == "kids_funny":
@@ -2660,6 +2862,16 @@ def _wwe_query_combinations(settings: Settings) -> list[str]:
     ]
 
 
+def _chess_query_combinations(settings: Settings) -> list[str]:
+    adjectives = _settings_csv(settings.chess_query_adjectives)
+    types = _settings_csv(settings.chess_query_types)
+    return [
+        _ensure_shorts_query(_ensure_chess_query(f"{adjective} {query_type}"))
+        for query_type in types
+        for adjective in adjectives
+    ]
+
+
 def _compilation_queries(settings: Settings) -> list[str]:
     if settings.content_domain == "football":
         generated = _football_query_combinations(settings)
@@ -2691,6 +2903,10 @@ def _compilation_queries(settings: Settings) -> list[str]:
         queries = [*generated, *configured]
     elif settings.content_domain == "wwe":
         generated = _wwe_query_combinations(settings)
+        configured = _settings_csv(settings.compilation_queries)
+        queries = [*generated, *configured]
+    elif settings.content_domain == "chess":
+        generated = _chess_query_combinations(settings)
         configured = _settings_csv(settings.compilation_queries)
         queries = [*generated, *configured]
     else:

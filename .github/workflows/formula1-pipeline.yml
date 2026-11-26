@@ -9,7 +9,7 @@ on:
     - cron: "0 12 * * 3"
     - cron: "0 14 * * 4"
     - cron: "0 16 * * 5"
-    - cron: "0 0 * * 6"
+    - cron: "0 18 * * 6"
 
 concurrency:
   group: formula1-youtube-shorts-pipeline

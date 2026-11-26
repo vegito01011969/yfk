@@ -274,6 +274,36 @@ WWE_EVENT_KEYWORDS = (
     "crowd,fans,crazy,unbelievable,incredible,impossible"
 )
 
+CHESS_ACTIVITY_SEED_QUERIES = (
+    "viral chess moments,chess shorts,chess challenge,chess compilation,"
+    "brilliant chess moves,chess checkmates,chess blunders,chess tactics"
+)
+
+CHESS_COMPILATION_QUERIES = (
+    "unreal chess moves shorts,epic chess checkmates shorts,"
+    "unforgettable chess moments shorts,insane chess tactics shorts,"
+    "best chess sacrifices shorts,impossible chess endgames shorts"
+)
+
+CHESS_QUERY_ADJECTIVES = (
+    "unreal,epic,unforgettable,insane,best,impossible,crazy,legendary,"
+    "dramatic,unbelievable,incredible,shocking"
+)
+
+CHESS_QUERY_TYPES = (
+    "chess moves,chess checkmates,chess tactics,chess sacrifices,chess blunders,"
+    "chess endgames,chess time scrambles,chess openings,chess puzzle moments,"
+    "online chess moments,chess streamer moments,chess tournament moments"
+)
+
+CHESS_EVENT_KEYWORDS = (
+    "chess,checkmate,checkmates,move,moves,tactic,tactics,sacrifice,sacrifices,"
+    "blunder,blunders,endgame,endgames,opening,openings,puzzle,puzzles,"
+    "grandmaster,grandmasters,gm,board,knight,bishop,rook,queen,king,pawn,pawns,"
+    "clock,time scramble,tournament,match,matches,online,streamer,brilliant,"
+    "crazy,unbelievable,incredible,impossible"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -344,6 +374,8 @@ class Settings(BaseSettings):
     inappropriate_query_pillars: str = INAPPROPRIATE_QUERY_PILLARS
     wwe_query_adjectives: str = WWE_QUERY_ADJECTIVES
     wwe_query_types: str = WWE_QUERY_TYPES
+    chess_query_adjectives: str = CHESS_QUERY_ADJECTIVES
+    chess_query_types: str = CHESS_QUERY_TYPES
     event_keywords: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -477,6 +509,17 @@ class Settings(BaseSettings):
                 self.compilation_queries = WWE_COMPILATION_QUERIES
             if not self.event_keywords:
                 self.event_keywords = WWE_EVENT_KEYWORDS
+        elif self.content_domain == "chess":
+            if not self.content_label:
+                self.content_label = "Chess Moments"
+            if not self.source_languages:
+                self.source_languages = "en"
+            if not self.youtube_activity_seed_queries:
+                self.youtube_activity_seed_queries = CHESS_ACTIVITY_SEED_QUERIES
+            if not self.compilation_queries:
+                self.compilation_queries = CHESS_COMPILATION_QUERIES
+            if not self.event_keywords:
+                self.event_keywords = CHESS_EVENT_KEYWORDS
         elif self.content_domain == "kids_funny":
             if not self.content_label:
                 self.content_label = "Funny Kid Clips"
