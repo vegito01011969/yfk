@@ -2744,6 +2744,7 @@ class CompilationQueryProvider:
             "volleyball",
             "inappropriate",
             "wwe",
+            "chess",
         }
         if self.settings.content_domain in randomized_query_domains:
             random.shuffle(candidates)
@@ -4268,6 +4269,7 @@ def build_providers(
             "volleyball",
             "inappropriate",
             "wwe",
+            "chess",
             "compilation",
         }
         else YouTubeTrendProvider(settings, youtube_client)

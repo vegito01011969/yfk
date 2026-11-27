@@ -25,6 +25,7 @@ from viral_pipeline.domain import (
 )
 from viral_pipeline.providers import (
     ColabYtDlpVideoDownloadProvider,
+    CompilationQueryProvider,
     YtDlpFfmpegMediaProvider,
     YtDlpVideoDownloadProvider,
     build_providers,
@@ -532,6 +533,16 @@ def test_build_providers_can_select_colab_download_backend(tmp_path: Path) -> No
     providers = build_providers(settings)
 
     assert isinstance(providers[2], ColabYtDlpVideoDownloadProvider)
+
+
+def test_build_providers_uses_compilation_queries_for_chess(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.content_domain = "chess"
+    settings.youtube_api_key = "test-key"
+
+    providers = build_providers(settings)
+
+    assert isinstance(providers[0], CompilationQueryProvider)
 
 
 def test_colab_batch_download_starts_worker_asynchronously(
